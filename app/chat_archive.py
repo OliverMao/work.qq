@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-import requests
+import httpx
 
 from app.config import settings
 
@@ -35,14 +35,14 @@ def _fetch_access_token() -> str:
         if _access_token and time.time() < _token_expires_at:
             return _access_token
 
-        resp = requests.get(
-            f"{WECOM_API}/cgi-bin/gettoken",
-            params={
-                "corpid": settings.corp_id,
-                "corpsecret": settings.chat_archive_secret,
-            },
-            timeout=15,
-        )
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(
+                f"{WECOM_API}/cgi-bin/gettoken",
+                params={
+                    "corpid": settings.corp_id,
+                    "corpsecret": settings.chat_archive_secret,
+                },
+            )
         data = resp.json()
         if data.get("errcode", 0) != 0:
             raise RuntimeError(f"获取 access_token 失败: {data}")
@@ -54,10 +54,11 @@ def _fetch_access_token() -> str:
 
 def _req_api(url: str, params: dict, data: dict = None) -> dict:
     params["access_token"] = _fetch_access_token()
-    kwargs: dict = {"params": params}
-    if data:
-        kwargs["json"] = data
-    resp = requests.post(url, timeout=30, **kwargs)
+    with httpx.Client(timeout=30) as client:
+        if data:
+            resp = client.post(url, params=params, json=data)
+        else:
+            resp = client.get(url, params=params)
     return resp.json()
 
 

@@ -1,7 +1,8 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pycryptodome
 lxml
 python-dotenv
 xmltodict
 typing-extensions
+httpx
