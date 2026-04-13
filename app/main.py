@@ -2,8 +2,11 @@
 FastAPI 主应用 - 企业微信消息接收
 """
 
+import json
 import logging
+import time
 import urllib.parse
+from typing import Optional
 
 import xmltodict
 from fastapi import FastAPI, Query, Request
@@ -12,6 +15,7 @@ from fastapi.responses import PlainTextResponse, Response
 from app.config import settings
 from app.crypto import WecomCrypto
 from app.service import dispatch_message
+from app.chat_archive import archive_to_file
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -143,3 +147,33 @@ def _build_text_reply(
         f"</xml>"
     )
     return crypto.encrypt_message(reply_msg, timestamp, nonce)
+
+
+@app.post("/chat/archive")
+async def chat_archive(
+    starttime: Optional[int] = Query(
+        default=None,
+        description="开始时间戳（秒）",
+    ),
+    endtime: Optional[int] = Query(
+        default=None,
+        description="结束时间戳（秒）",
+    ),
+):
+    """
+    拉取会话内容存档并保存到本地 JSON 文件
+
+    调用示例:
+      POST /chat/archive?starttime=1700000000&endtime=1700086400
+      POST /chat/archive   (默认拉取最近24小时)
+    """
+    try:
+        result = archive_to_file(starttime=starttime, endtime=endtime)
+        return result
+    except Exception as e:
+        logger.exception("会话存档失败")
+        return {
+            "errcode": -1,
+            "errmsg": str(e),
+            "saved_count": 0,
+        }

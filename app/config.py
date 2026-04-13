@@ -32,6 +32,25 @@ class Settings:
     def agent_id(self) -> int:
         return int(self._env.get("WECOM_AGENT_ID", "0"))
 
+    @property
+    def chat_archive_secret(self) -> str:
+        return self._env.get("WECOM_CHAT_ARCHIVE_SECRET", "")
+
+    @property
+    def rsa_private_key_path(self) -> str:
+        return self._env.get("WECOM_RSA_PRIVATE_KEY_PATH", "")
+
+    @property
+    def chat_archive_save_dir(self) -> str:
+        return self._env.get(
+            "WECOM_CHAT_ARCHIVE_SAVE_DIR",
+            str(Path(__file__).parent.parent / "archive_data"),
+        )
+
+    @property
+    def sdk_lib_path(self) -> str:
+        return self._env.get("WECOM_SDK_LIB_PATH", "")
+
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)
 
