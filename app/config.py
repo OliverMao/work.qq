@@ -38,7 +38,8 @@ class Settings:
 
     @property
     def rsa_private_key_path(self) -> str:
-        return self._env.get("WECOM_RSA_PRIVATE_KEY_PATH", "")
+        default = Path(__file__).parent.parent / "keys" / "private.pem"
+        return self._env.get("WECOM_RSA_PRIVATE_KEY_PATH", str(default))
 
     @property
     def chat_archive_save_dir(self) -> str:

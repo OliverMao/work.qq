@@ -1,93 +1,148 @@
 """
-企业微信会话内容存档 — HTTP 调用版
-无需 C SDK，纯 REST API 实现
+企业微信会话内容存档 — C SDK 版
+使用企业微信提供的 C SDK 动态库进行会话内容拉取和解密
 """
 
+import base64
+import ctypes
 import json
 import logging
 import os
-import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-import httpx
-
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-WECOM_API = "https://qyapi.weixin.qq.com"
-_token_lock = threading.Lock()
-_access_token: str = ""
-_token_expires_at: float = 0
+
+class Slice(ctypes.Structure):
+    _fields_ = [
+        ("content", ctypes.c_char_p),
+        ("len", ctypes.c_uint),
+    ]
 
 
-def _fetch_access_token() -> str:
-    """获取会话存档专用的 access_token"""
-    global _access_token, _token_expires_at
-    now = time.time()
-    if _access_token and now < _token_expires_at:
-        return _access_token
+class WeWorkFinanceSDK:
+    """企业微信会话存档 SDK 封装"""
 
-    with _token_lock:
-        if _access_token and time.time() < _token_expires_at:
-            return _access_token
+    def __init__(self, sdk_path: str, rsa_key_path: str):
+        if not os.path.exists(sdk_path):
+            raise FileNotFoundError(f"SDK 库不存在: {sdk_path}")
 
-        with httpx.Client(timeout=15) as client:
-            resp = client.get(
-                f"{WECOM_API}/cgi-bin/gettoken",
-                params={
-                    "corpid": settings.corp_id,
-                    "corpsecret": settings.chat_archive_secret,
-                },
-            )
-        data = resp.json()
-        if data.get("errcode", 0) != 0:
-            raise RuntimeError(f"获取 access_token 失败: {data}")
+        self.lib = ctypes.CDLL(sdk_path)
 
-        _access_token = data["access_token"]
-        _token_expires_at = time.time() + data.get("expires_in", 7200) - 300
-        return _access_token
+        self.lib.NewSdk.restype = ctypes.c_void_p
+        self.lib.DestroySdk.argtypes = [ctypes.c_void_p]
+        self.lib.DestroySdk.restype = None
 
+        self.lib.Init.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+        self.lib.Init.restype = ctypes.c_int
 
-def _req_api(url: str, params: dict, data: dict = None) -> dict:
-    params["access_token"] = _fetch_access_token()
-    with httpx.Client(timeout=30) as client:
-        if data:
-            resp = client.post(url, params=params, json=data)
-        else:
-            resp = client.get(url, params=params)
-    return resp.json()
+        self.lib.GetChatData.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulonglong,
+            ctypes.c_uint,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.POINTER(Slice),
+        ]
+        self.lib.GetChatData.restype = ctypes.c_int
 
+        self.lib.DecryptData.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.POINTER(Slice),
+        ]
+        self.lib.DecryptData.restype = ctypes.c_int
 
-def get_cur_page_count(starttime: int, endtime: int) -> int:
-    """
-    获取会话记录页数 (每页100条)
-    文档: https://developer.work.weixin.qq.com/document/path/95013
-    """
-    data = _req_api(
-        f"{WECOM_API}/cgi-bin/finance/getcurpagecountcount",
-        params={"starttime": starttime, "endtime": endtime},
-    )
-    if data.get("errcode", 0) != 0:
-        raise RuntimeError(f"getcurpagecount 失败: {data}")
-    return data.get("page_cnt", 0)
+        self.lib.FreeSlice.argtypes = [ctypes.c_void_p]
+        self.lib.FreeSlice.restype = None
 
+        self.sdk = self.lib.NewSdk()
 
-def get_page_content(starttime: int, endtime: int, page: int) -> dict:
-    """
-    获取指定页会话记录
-    文档: https://developer.work.weixin.qq.com/document/path/95014
-    """
-    data = _req_api(
-        f"{WECOM_API}/cgi-bin/finance/getpagecontent",
-        params={"starttime": starttime, "endtime": endtime, "page": page},
-    )
-    if data.get("errcode", 0) != 0:
-        raise RuntimeError(f"getpagecontent 失败: {data}")
-    return data
+        rsa_key = self._load_rsa_key(rsa_key_path)
+        ret = self.lib.Init(
+            self.sdk,
+            settings.corp_id.encode(),
+            settings.chat_archive_secret.encode(),
+        )
+        if ret != 0:
+            raise RuntimeError(f"SDK Init 失败, ret={ret}")
+
+    def _load_rsa_key(self, path: str) -> str:
+        with open(path, "r") as f:
+            return f.read()
+
+    def rsa_decrypt(self, encrypted: str, rsa_key: str) -> Optional[str]:
+        """Python 实现 RSA 解密"""
+        from Crypto.Cipher import PKCS1_v1_5
+        from Crypto.PublicKey import RSA
+
+        encrypted_data = base64.b64decode(encrypted)
+        key = RSA.import_key(rsa_key)
+        cipher = PKCS1_v1_5.new(key)
+        try:
+            return cipher.decrypt(encrypted_data, None).decode("utf-8")
+        except Exception as e:
+            logger.error(f"RSA 解密失败: {e}")
+            return None
+
+    def get_chat_data(self, seq: int = 0, limit: int = 1000) -> List[Dict]:
+        """拉取会话数据"""
+        chat_slice = Slice()
+        ret = self.lib.GetChatData(
+            self.sdk,
+            seq,
+            limit,
+            b"",
+            b"",
+            30,
+            ctypes.byref(chat_slice),
+        )
+        if ret != 0:
+            raise RuntimeError(f"GetChatData 失败, ret={ret}")
+
+        data = chat_slice.content[: chat_slice.len].decode("utf-8")
+        self.lib.FreeSlice(ctypes.byref(chat_slice))
+
+        result = json.loads(data)
+        if result.get("errcode", 0) != 0:
+            raise RuntimeError(f"GetChatData API 错误: {result}")
+
+        return result.get("chatdata", [])
+
+    def decrypt_message(
+        self, encrypt_key: str, encrypt_msg: str, rsa_key: str
+    ) -> Optional[Dict]:
+        """解密���条消息"""
+        aes_key = self.rsa_decrypt(encrypt_key, rsa_key)
+        if not aes_key:
+            return None
+
+        msg_slice = Slice()
+        ret = self.lib.DecryptData(
+            self.sdk,
+            aes_key.encode(),
+            encrypt_msg.encode(),
+            ctypes.byref(msg_slice),
+        )
+        if ret != 0:
+            logger.warning(f"DecryptData 失败, ret={ret}")
+            return None
+
+        data = msg_slice.content[: msg_slice.len].decode("utf-8")
+        self.lib.FreeSlice(ctypes.byref(msg_slice))
+
+        return json.loads(data)
+
+    def __del__(self):
+        if hasattr(self, "sdk") and self.sdk:
+            self.lib.DestroySdk(self.sdk)
 
 
 def archive_to_file(
@@ -96,7 +151,7 @@ def archive_to_file(
     save_dir: Optional[str] = None,
 ) -> dict:
     """
-    拉取会话内容并保存为 JSON 文件
+    使用 C SDK 拉取会话内容并保存为 JSON 文件
 
     Returns:
         {
@@ -116,40 +171,57 @@ def archive_to_file(
     save_dir = save_dir or settings.chat_archive_save_dir
     Path(save_dir).mkdir(parents=True, exist_ok=True)
 
-    try:
-        page_cnt = get_cur_page_count(starttime, endtime)
-    except Exception as e:
-        # 尝试直接拉取 page=0
-        try:
-            page_data = get_page_content(starttime, endtime, 0)
-            page_cnt = 1 if page_data.get("chat_data") else 0
-        except Exception as e2:
-            return {"errcode": -1, "errmsg": str(e2), "saved_count": 0}
+    rsa_key_path = settings.rsa_private_key_path or str(
+        Path(__file__).parent.parent / "keys" / "private.pem"
+    )
+    sdk_lib_path = "/www/workqq/work.qq/sdk/C_sdk/libWeWorkFinanceSdk_C.so"
 
-    if page_cnt == 0:
+    try:
+        sdk = WeWorkFinanceSDK(sdk_lib_path, rsa_key_path)
+    except Exception as e:
         return {
-            "errcode": 0,
-            "errmsg": "没有找到会话记录",
+            "errcode": -1,
+            "errmsg": f"SDK 初始化失败: {e}",
             "saved_count": 0,
-            "save_path": None,
-            "messages": [],
         }
 
+    with open(rsa_key_path, "r") as f:
+        rsa_key = f.read()
+
     all_messages: List[Dict[str, Any]] = []
-    for page_idx in range(page_cnt):
+    seq = 0
+
+    while True:
         try:
-            logger.info("拉取第 %d/%d 页...", page_idx + 1, page_cnt)
-            data = get_page_content(starttime, endtime, page_idx)
-            chat_list = data.get("chat_data", [])
-            all_messages.extend(chat_list)
+            chat_list = sdk.get_chat_data(seq=seq, limit=1000)
         except Exception as e:
-            logger.error("第 %d 页拉取失败: %s", page_idx + 1, e)
-            continue
+            logger.error(f"GetChatData 失败: {e}")
+            break
+
+        if not chat_list:
+            break
+
+        for chat in chat_list:
+            try:
+                msg = sdk.decrypt_message(
+                    chat.get("encrypt_random_key", ""),
+                    chat.get("encrypt_chat_msg", ""),
+                    rsa_key,
+                )
+                if msg:
+                    all_messages.append(msg)
+            except Exception as e:
+                logger.warning(f"解密消息失败: {e}")
+                continue
+
+        if len(chat_list) < 1000:
+            break
+        seq = chat_list[-1].get("seq", seq)
 
     if not all_messages:
         return {
             "errcode": 0,
-            "errmsg": "会话记录为空",
+            "errmsg": "没有会话记录",
             "saved_count": 0,
             "save_path": None,
             "messages": [],
