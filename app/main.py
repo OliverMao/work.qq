@@ -25,28 +25,39 @@ crypto = WecomCrypto(
 )
 
 
-@app.get("/callback")
+@app.get("/")
 async def verify_url(
-    msg_signature: str = Query(...),
-    timestamp: str = Query(...),
-    nonce: str = Query(...),
-    echostr: str = Query(...),
+    msg_signature: str = Query(default=None),
+    timestamp: str = Query(default=None),
+    nonce: str = Query(default=None),
+    echostr: str = Query(default=None),
 ):
-    """企业微信 URL 验证回调"""
+    """企业微信 URL 验证回调 - GET"""
+    if not all([msg_signature, timestamp, nonce, echostr]):
+        return PlainTextResponse("WeCom Message Receiver", status_code=200)
+
+    echostr = urllib.parse.unquote(echostr)
+
     if not crypto.verify_signature(timestamp, nonce, echostr, msg_signature):
         return PlainTextResponse("signature mismatch", status_code=403)
+
     verify_msg = crypto.decrypt_echostr(echostr)
-    return PlainTextResponse(content=verify_msg)
+
+    return Response(
+        content=verify_msg,
+        media_type="text/plain",
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+    )
 
 
-@app.post("/callback")
+@app.post("/")
 async def receive_message(
     request: Request,
     msg_signature: str = Query(...),
     timestamp: str = Query(...),
     nonce: str = Query(...),
 ):
-    """接收企业微信推送的消息/事件"""
+    """接收企业微信推送的消息/事件 - POST"""
     body = await request.body()
     xml_data = xmltodict.parse(body.decode("utf-8"))["xml"]
     encrypt_msg = xml_data["Encrypt"]

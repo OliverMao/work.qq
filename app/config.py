@@ -2,14 +2,19 @@
 企业微信配置管理
 """
 
-from dotenv import dotenv_values
 import os
+from pathlib import Path
+from dotenv import dotenv_values
 
 
 class Settings:
     def __init__(self):
-        env_file = os.path.join(os.path.dirname(__file__), ".env")
-        self._env = dotenv_values(env_file)
+        project_root = Path(__file__).parent.parent
+        env_file = project_root / ".env"
+        if env_file.exists():
+            self._env = dotenv_values(env_file)
+        else:
+            self._env = {}
 
     @property
     def corp_id(self) -> str:
@@ -26,6 +31,9 @@ class Settings:
     @property
     def agent_id(self) -> int:
         return int(self._env.get("WECOM_AGENT_ID", "0"))
+
+    def is_configured(self) -> bool:
+        return bool(self.corp_id and self.token and self.encoding_aes_key)
 
 
 settings = Settings()
