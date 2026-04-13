@@ -59,6 +59,8 @@ async def receive_message(
 ):
     """接收企业微信推送的消息/事件 - POST"""
     body = await request.body()
+    logger.info("Raw XML body: %s", body.decode("utf-8"))
+
     xml_data = xmltodict.parse(body.decode("utf-8"))["xml"]
     encrypt_msg = xml_data["Encrypt"]
 
@@ -66,9 +68,51 @@ async def receive_message(
         return Response(status_code=403, content="msg_signature mismatch")
 
     decrypted_xml, _, _, _ = crypto.decrypt_message(encrypt_msg)
-    msg_dict = xmltodict.parse(decrypted_xml)["xml"]
 
-    logger.info("Decrypted message: %s", msg_dict)
+    logger.info("=" * 50)
+    logger.info("Received Decrypted Message:")
+    logger.info("=" * 50)
+    logger.info("Decrypted XML:\n%s", decrypted_xml)
+
+    msg_dict = xmltodict.parse(decrypted_xml)["xml"]
+    msg_type = msg_dict.get("MsgType", "")
+    msg_id = msg_dict.get("MsgId", "")
+    from_user = msg_dict.get("FromUserName", "")
+    to_user = msg_dict.get("ToUserName", "")
+
+    logger.info("MsgType: %s", msg_type)
+    logger.info("MsgId: %s", msg_id)
+    logger.info("FromUserName: %s", from_user)
+    logger.info("ToUserName: %s", to_user)
+
+    if msg_type == "text":
+        logger.info("Content: %s", msg_dict.get("Content", ""))
+    elif msg_type == "image":
+        logger.info("PicUrl: %s", msg_dict.get("PicUrl", ""))
+        logger.info("MediaId: %s", msg_dict.get("MediaId", ""))
+    elif msg_type == "voice":
+        logger.info("MediaId: %s", msg_dict.get("MediaId", ""))
+        logger.info("Format: %s", msg_dict.get("Format", ""))
+    elif msg_type == "video":
+        logger.info("MediaId: %s", msg_dict.get("MediaId", ""))
+        logger.info("ThumbMediaId: %s", msg_dict.get("ThumbMediaId", ""))
+    elif msg_type == "location":
+        logger.info(
+            "Location: %s, %s",
+            msg_dict.get("Location_X", ""),
+            msg_dict.get("Location_Y", ""),
+        )
+        logger.info("Label: %s", msg_dict.get("Label", ""))
+    elif msg_type == "link":
+        logger.info("Title: %s", msg_dict.get("Title", ""))
+        logger.info("Url: %s", msg_dict.get("Url", ""))
+    elif msg_type == "event":
+        event = msg_dict.get("Event", "")
+        logger.info("Event: %s", event)
+        if event == "click":
+            logger.info("EventKey: %s", msg_dict.get("EventKey", ""))
+
+    logger.info("=" * 50)
 
     msg_type = msg_dict.get("MsgType", "")
     reply_content = dispatch_message(msg_type, msg_dict)
