@@ -18,13 +18,6 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-class Slice(ctypes.Structure):
-    _fields_ = [
-        ("content", ctypes.c_char_p),
-        ("len", ctypes.c_uint),
-    ]
-
-
 class WeWorkFinanceSDK:
     """企业微信会话存档 SDK 封装"""
 
@@ -48,7 +41,7 @@ class WeWorkFinanceSDK:
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_int,
-            ctypes.POINTER(Slice),
+            ctypes.c_void_p,
         ]
         self.lib.GetChatData.restype = ctypes.c_int
 
@@ -56,16 +49,18 @@ class WeWorkFinanceSDK:
             ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.c_char_p,
-            ctypes.POINTER(Slice),
+            ctypes.c_void_p,
         ]
         self.lib.DecryptData.restype = ctypes.c_int
+
+        self.lib.GetContentFromSlice.argtypes = [ctypes.c_void_p]
+        self.lib.GetContentFromSlice.restype = ctypes.c_char_p
 
         self.lib.FreeSlice.argtypes = [ctypes.c_void_p]
         self.lib.FreeSlice.restype = None
 
         self.sdk = self.lib.NewSdk()
 
-        rsa_key = self._load_rsa_key(rsa_key_path)
         ret = self.lib.Init(
             self.sdk,
             settings.corp_id.encode(),
@@ -74,17 +69,19 @@ class WeWorkFinanceSDK:
         if ret != 0:
             raise RuntimeError(f"SDK Init 失败, ret={ret}")
 
+        self._rsa_key = self._load_rsa_key(rsa_key_path)
+
     def _load_rsa_key(self, path: str) -> str:
         with open(path, "r") as f:
             return f.read()
 
-    def rsa_decrypt(self, encrypted: str, rsa_key: str) -> Optional[str]:
+    def rsa_decrypt(self, encrypted: str) -> Optional[str]:
         """Python 实现 RSA 解密"""
         from Crypto.Cipher import PKCS1_v1_5
         from Crypto.PublicKey import RSA
 
         encrypted_data = base64.b64decode(encrypted)
-        key = RSA.import_key(rsa_key)
+        key = RSA.import_key(self._rsa_key)
         cipher = PKCS1_v1_5.new(key)
         try:
             return cipher.decrypt(encrypted_data, None).decode("utf-8")
@@ -94,21 +91,24 @@ class WeWorkFinanceSDK:
 
     def get_chat_data(self, seq: int = 0, limit: int = 1000) -> List[Dict]:
         """拉取会话数据"""
-        chat_slice = Slice()
+        result_buf = ctypes.c_void_p()
+
         ret = self.lib.GetChatData(
             self.sdk,
-            seq,
-            limit,
+            ctypes.c_ulonglong(seq),
+            ctypes.c_uint(limit),
             b"",
             b"",
-            30,
-            ctypes.byref(chat_slice),
+            ctypes.c_int(30),
+            ctypes.byref(result_buf),
         )
         if ret != 0:
             raise RuntimeError(f"GetChatData 失败, ret={ret}")
 
-        data = chat_slice.content[: chat_slice.len].decode("utf-8")
-        self.lib.FreeSlice(ctypes.byref(chat_slice))
+        data = ctypes.string_at(self.lib.GetContentFromSlice(result_buf)).decode(
+            "utf-8"
+        )
+        self.lib.FreeSlice(result_buf)
 
         result = json.loads(data)
         if result.get("errcode", 0) != 0:
@@ -116,27 +116,27 @@ class WeWorkFinanceSDK:
 
         return result.get("chatdata", [])
 
-    def decrypt_message(
-        self, encrypt_key: str, encrypt_msg: str, rsa_key: str
-    ) -> Optional[Dict]:
-        """解密���条消息"""
-        aes_key = self.rsa_decrypt(encrypt_key, rsa_key)
+    def decrypt_message(self, encrypt_key: str, encrypt_msg: str) -> Optional[Dict]:
+        """解密单条消息"""
+        aes_key = self.rsa_decrypt(encrypt_key)
         if not aes_key:
             return None
 
-        msg_slice = Slice()
+        result_buf = ctypes.c_void_p()
         ret = self.lib.DecryptData(
             self.sdk,
             aes_key.encode(),
             encrypt_msg.encode(),
-            ctypes.byref(msg_slice),
+            ctypes.byref(result_buf),
         )
         if ret != 0:
             logger.warning(f"DecryptData 失败, ret={ret}")
             return None
 
-        data = msg_slice.content[: msg_slice.len].decode("utf-8")
-        self.lib.FreeSlice(ctypes.byref(msg_slice))
+        data = ctypes.string_at(self.lib.GetContentFromSlice(result_buf)).decode(
+            "utf-8"
+        )
+        self.lib.FreeSlice(result_buf)
 
         return json.loads(data)
 
@@ -150,18 +150,7 @@ def archive_to_file(
     endtime: Optional[int] = None,
     save_dir: Optional[str] = None,
 ) -> dict:
-    """
-    使用 C SDK 拉取会话内容并保存为 JSON 文件
-
-    Returns:
-        {
-            "errcode": 0,
-            "errmsg": "ok",
-            "saved_count": 123,
-            "save_path": "/path/to/archive_xxx.json",
-            "messages": [{...}, ...]
-        }
-    """
+    """使用 C SDK 拉取会话内容并保存为 JSON 文件"""
     now_ts = int(time.time())
     if not endtime:
         endtime = now_ts
@@ -179,14 +168,7 @@ def archive_to_file(
     try:
         sdk = WeWorkFinanceSDK(sdk_lib_path, rsa_key_path)
     except Exception as e:
-        return {
-            "errcode": -1,
-            "errmsg": f"SDK 初始化失败: {e}",
-            "saved_count": 0,
-        }
-
-    with open(rsa_key_path, "r") as f:
-        rsa_key = f.read()
+        return {"errcode": -1, "errmsg": f"SDK 初始化失败: {e}", "saved_count": 0}
 
     all_messages: List[Dict[str, Any]] = []
     seq = 0
@@ -206,7 +188,6 @@ def archive_to_file(
                 msg = sdk.decrypt_message(
                     chat.get("encrypt_random_key", ""),
                     chat.get("encrypt_chat_msg", ""),
-                    rsa_key,
                 )
                 if msg:
                     all_messages.append(msg)
