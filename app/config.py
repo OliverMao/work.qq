@@ -50,7 +50,17 @@ class Settings:
 
     @property
     def sdk_lib_path(self) -> str:
-        return self._env.get("WECOM_SDK_LIB_PATH", "")
+        default = "/www/workqq/work.qq/sdk/C_sdk/libWeWorkFinanceSdk_C.so"
+        return self._env.get("WECOM_SDK_LIB_PATH", default)
+
+    @property
+    def chat_archive_use_sdk(self) -> bool:
+        return self._env.get("WECOM_CHAT_ARCHIVE_USE_SDK", "0").strip() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)

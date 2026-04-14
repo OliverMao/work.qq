@@ -15,7 +15,7 @@ from fastapi.responses import PlainTextResponse, Response
 from app.config import settings
 from app.crypto import WecomCrypto
 from app.service import dispatch_message
-from app.chat_archive import archive_to_file
+from app.services.chat_archive import chat_archive_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -168,7 +168,21 @@ async def chat_archive(
       POST /chat/archive   (默认拉取最近24小时)
     """
     try:
-        result = archive_to_file(starttime=starttime, endtime=endtime)
+        logger.info(
+            "收到会话存档请求: starttime=%s, endtime=%s",
+            starttime,
+            endtime,
+        )
+        result = chat_archive_service.archive_messages(
+            begin_time=starttime or 0, end_time=endtime or 0
+        )
+        logger.info(
+            "会话存档完成: saved_count=%s, save_path=%s",
+            result.get("saved_count", 0),
+            result.get("save_path"),
+        )
+        result.setdefault("errcode", 0)
+        result.setdefault("errmsg", "ok")
         return result
     except Exception as e:
         logger.exception("会话存档失败")
@@ -176,4 +190,36 @@ async def chat_archive(
             "errcode": -1,
             "errmsg": str(e),
             "saved_count": 0,
+        }
+
+
+@app.post("/chat/archive/groups")
+async def chat_archive_groups(
+    days: int = Query(
+        default=5,
+        ge=1,
+        le=30,
+        description="归档最近 N 天，默认 5 天",
+    ),
+):
+    """拉取最近 N 天消息，按群聊维度拆分为多个 JSON 文件。"""
+    try:
+        logger.info("收到群聊归档请求: days=%s", days)
+        result = chat_archive_service.archive_group_messages(days=days)
+        logger.info(
+            "群聊归档完成: group_count=%s, saved_count=%s, save_dir=%s",
+            result.get("group_count", 0),
+            result.get("saved_count", 0),
+            result.get("save_dir"),
+        )
+        return result
+    except Exception as e:
+        logger.exception("群聊归档失败")
+        return {
+            "errcode": -1,
+            "errmsg": str(e),
+            "group_count": 0,
+            "saved_count": 0,
+            "save_dir": None,
+            "files": [],
         }
