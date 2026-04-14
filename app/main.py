@@ -151,14 +151,6 @@ def _build_text_reply(
 
 @app.post("/chat/archive")
 async def chat_archive(
-    starttime: Optional[int] = Query(
-        default=None,
-        description="开始时间戳（秒）",
-    ),
-    endtime: Optional[int] = Query(
-        default=None,
-        description="结束时间戳（秒）",
-    ),
 ):
     """
     拉取会话内容存档并保存到本地 JSON 文件
@@ -169,12 +161,9 @@ async def chat_archive(
     """
     try:
         logger.info(
-            "收到会话存档请求: starttime=%s, endtime=%s",
-            starttime,
-            endtime,
+            "收到会话存档请求",
         )
         result = chat_archive_service.archive_messages(
-            begin_time=starttime or 0, end_time=endtime or 0
         )
         logger.info(
             "会话存档完成: saved_count=%s, save_path=%s",

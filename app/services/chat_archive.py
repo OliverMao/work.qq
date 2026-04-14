@@ -213,19 +213,6 @@ class ChatArchiveService:
         return records
 
     @staticmethod
-    def _extract_group_id(
-        chat: Dict[str, Any], message: Dict[str, Any]
-    ) -> Optional[str]:
-        for key in ("roomid", "chatid", "conversation_id", "external_chatid"):
-            value = message.get(key) if isinstance(message, dict) else None
-            if value:
-                return str(value)
-            value = chat.get(key) if isinstance(chat, dict) else None
-            if value:
-                return str(value)
-        return None
-
-    @staticmethod
     def _extract_chat_name(message: Dict[str, Any]) -> Optional[str]:
         """从消息中提取会话名称"""
         for key in ("room_name", "chat_name", "name", "conversation_name"):
@@ -235,9 +222,9 @@ class ChatArchiveService:
         return None
 
     @staticmethod
-    def _safe_group_id(group_id: str) -> str:
+    def _safe_roomid(roomid: str) -> str:
         safe = "".join(
-            ch if (ch.isalnum() or ch in ("-", "_")) else "_" for ch in group_id
+            ch if (ch.isalnum() or ch in ("-", "_")) else "_" for ch in roomid
         )
         safe = safe.strip("_")
         if not safe:
@@ -283,10 +270,11 @@ class ChatArchiveService:
         token = self._get_access_token()
         if not token:
             return None
-        url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/get?access_token={token}&chatid={chat_id}"
+        url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/get?access_token={token}&roomid={chat_id}"
         try:
             resp = requests.get(url, timeout=10)
             data = resp.json()
+            print(data)
             if data.get("errcode") == 0:
                 chat_info = data.get("chat_info")
                 if not hasattr(self, "_chat_info_cache"):
@@ -300,8 +288,6 @@ class ChatArchiveService:
 
     def archive_messages(
         self,
-        begin_time: int = 0,
-        end_time: int = 0,
         limit: int = 1000,
     ) -> dict:
         """
@@ -321,39 +307,34 @@ class ChatArchiveService:
                             "messages": [...]
                         }
         """
-        import time as _time
 
-        if not end_time:
-            end_time = int(_time.time())
-        if not begin_time:
-            begin_time = end_time - 86400
 
         save_dir = settings.chat_archive_save_dir
         Path(save_dir).mkdir(parents=True, exist_ok=True)
 
         records = self._pull_decrypted_records(limit=limit)
+        print(f"拉取到 {len(records)} 条会话记录，开始处理...",records)
         group_messages: Dict[str, List[Dict[str, Any]]] = {}
 
         for record in records:
             chat = record.get("chat", {})
             message = record.get("message", {})
             msg_time = int(chat.get("msgtime", message.get("msgtime", 0)) or 0)
-            if msg_time and (msg_time < begin_time or msg_time > end_time):
-                continue
 
-            group_id = self._extract_group_id(chat, message)
-            if not group_id:
+
+            roomid = message.get("roomid")
+            if not roomid:
                 continue
 
             chat_name = self._extract_chat_name(message)
-            group_messages.setdefault(group_id, []).append(
+            group_messages.setdefault(roomid, []).append(
                 {
                     "msgid": chat.get("msgid"),
                     "action": chat.get("action"),
                     "from": chat.get("from"),
                     "tolist": chat.get("tolist"),
                     "roomid": chat.get("roomid", message.get("roomid")),
-                    "chatid": chat.get("chatid", message.get("chatid")),
+                    "roomid": chat.get("roomid", message.get("roomid")),
                     "chat_name": chat_name,
                     "msgtime": msg_time,
                     "message": message,
@@ -373,17 +354,15 @@ class ChatArchiveService:
         saved_files: List[Dict[str, Any]] = []
         all_messages: List[Dict[str, Any]] = []
 
-        for group_id, items in group_messages.items():
+        for roomid, items in group_messages.items():
             items.sort(key=lambda x: x.get("msgtime") or 0)
-            chat_name = items[0].get("chat_name") if items else None
-            if not chat_name:
-                chat_info = self._get_chat_info(group_id)
-                if chat_info:
-                    chat_name = chat_info.get("name")
+            chat_info = self._get_chat_info(roomid)
+            if chat_info:
+                chat_name = chat_info.get("name")
 
             safe_chat_name = self._safe_chat_name(chat_name)
-            safe_group_id = self._safe_group_id(group_id)
-            filename = f"{safe_chat_name}+{safe_group_id}.json"
+            safe_roomid = self._safe_roomid(roomid)
+            filename = f"{safe_chat_name}+{safe_roomid}.json"
             file_path = os.path.join(save_dir, filename)
 
             messages = [item.get("message", {}) for item in items]
@@ -393,7 +372,7 @@ class ChatArchiveService:
             all_messages.extend(messages)
             saved_files.append(
                 {
-                    "group_id": group_id,
+                    "roomid": roomid,
                     "chat_name": chat_name,
                     "count": len(messages),
                     "save_path": file_path,
