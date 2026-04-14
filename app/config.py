@@ -62,6 +62,10 @@ class Settings:
             "on",
         }
 
+    @property
+    def corp_secret(self) -> str:
+        return self._env.get("WECOM_CHAT_ARCHIVE_SECRET", "")
+
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)
 

@@ -20,6 +20,8 @@ from ctypes import (
     string_at,
 )
 
+import requests
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -224,7 +226,16 @@ class ChatArchiveService:
         return None
 
     @staticmethod
-    def _safe_group_filename(group_id: str) -> str:
+    def _extract_chat_name(message: Dict[str, Any]) -> Optional[str]:
+        """从消息中提取会话名称"""
+        for key in ("room_name", "chat_name", "name", "conversation_name"):
+            value = message.get(key)
+            if value:
+                return str(value)
+        return None
+
+    @staticmethod
+    def _safe_group_id(group_id: str) -> str:
         safe = "".join(
             ch if (ch.isalnum() or ch in ("-", "_")) else "_" for ch in group_id
         )
@@ -233,6 +244,60 @@ class ChatArchiveService:
             safe = "unknown_group"
         return safe[:80]
 
+    @staticmethod
+    def _safe_chat_name(chat_name: Optional[str]) -> str:
+        raw = (chat_name or "unknown_chat").strip()
+        # Windows 文件名非法字符: \\ / : * ? " < > |
+        safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in raw)
+        safe = " ".join(safe.split())
+        if not safe:
+            safe = "unknown_chat"
+        return safe[:80]
+
+    def _get_access_token(self) -> Optional[str]:
+        """获取企业微信access_token"""
+        if hasattr(self, "_cached_token") and hasattr(self, "_token_expires_at"):
+            if time.time() < self._token_expires_at:
+                return self._cached_token
+
+        url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={settings.corp_id}&corpsecret={settings.corp_secret}"
+        try:
+            resp = requests.get(url, timeout=10)
+            data = resp.json()
+            if data.get("errcode") == 0:
+                self._cached_token = data.get("access_token")
+                self._token_expires_at = (
+                    time.time() + data.get("expires_in", 7200) - 300
+                )
+                return self._cached_token
+            logger.error("获取access_token失败: %s", data)
+        except Exception as e:
+            logger.error("获取access_token异常: %s", e)
+        return None
+
+    def _get_chat_info(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """获取群聊会话信息"""
+        if hasattr(self, "_chat_info_cache") and chat_id in self._chat_info_cache:
+            return self._chat_info_cache[chat_id]
+
+        token = self._get_access_token()
+        if not token:
+            return None
+        url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/get?access_token={token}&chatid={chat_id}"
+        try:
+            resp = requests.get(url, timeout=10)
+            data = resp.json()
+            if data.get("errcode") == 0:
+                chat_info = data.get("chat_info")
+                if not hasattr(self, "_chat_info_cache"):
+                    self._chat_info_cache = {}
+                self._chat_info_cache[chat_id] = chat_info
+                return chat_info
+            logger.error("获取群聊信息失败: %s", data)
+        except Exception as e:
+            logger.error("获取群聊信息异常: %s", e)
+        return None
+
     def archive_messages(
         self,
         begin_time: int = 0,
@@ -240,15 +305,21 @@ class ChatArchiveService:
         limit: int = 1000,
     ) -> dict:
         """
-        拉取并保存会话内容到本地文件
+        拉取并保存会话内容到本地文件（按群聊拆分）
 
         Args:
             begin_time: 开始时间戳 (秒)
             end_time:   结束时间戳 (秒)
             limit:      拉取条数 (最大1000)
 
-        Returns:
-            {"saved_count": N, "save_path": "...", "messages": [...]}
+                Returns:
+                        {
+                            "saved_count": N,
+                            "save_path": "...",  # 仅有一个群聊文件时返回
+                            "save_dir": "...",
+                            "files": [...],
+                            "messages": [...]
+                        }
         """
         import time as _time
 
@@ -259,34 +330,6 @@ class ChatArchiveService:
 
         save_dir = settings.chat_archive_save_dir
         Path(save_dir).mkdir(parents=True, exist_ok=True)
-
-        records = self._pull_decrypted_records(limit=limit)
-        messages = [r.get("message", {}) for r in records]
-
-        if not messages:
-            logger.info("会话存档完成: 没有可保存的消息")
-            return {"saved_count": 0, "save_path": None, "messages": []}
-
-        filename = f"archive_{begin_time}_{end_time}.json"
-        save_path = os.path.join(save_dir, filename)
-        with open(save_path, "w", encoding="utf-8") as f:
-            json.dump(messages, f, ensure_ascii=False, indent=2)
-
-        return {
-            "saved_count": len(messages),
-            "save_path": save_path,
-            "messages": messages,
-        }
-
-    def archive_group_messages(
-        self,
-        days: int = 5,
-        limit: int = 1000,
-    ) -> dict:
-        """拉取最近 N 天消息，并按群聊维度分文件保存。"""
-        now_ts = int(time.time())
-        begin_time = now_ts - max(days, 1) * 86400
-        end_time = now_ts
 
         records = self._pull_decrypted_records(limit=limit)
         group_messages: Dict[str, List[Dict[str, Any]]] = {}
@@ -302,62 +345,70 @@ class ChatArchiveService:
             if not group_id:
                 continue
 
+            chat_name = self._extract_chat_name(message)
             group_messages.setdefault(group_id, []).append(
                 {
-                    "seq": chat.get("seq"),
                     "msgid": chat.get("msgid"),
-                    "msgtime": msg_time,
+                    "action": chat.get("action"),
                     "from": chat.get("from"),
                     "tolist": chat.get("tolist"),
                     "roomid": chat.get("roomid", message.get("roomid")),
                     "chatid": chat.get("chatid", message.get("chatid")),
+                    "chat_name": chat_name,
+                    "msgtime": msg_time,
                     "message": message,
                 }
             )
 
         if not group_messages:
+            logger.info("会话存档完成: 没有可保存的消息")
             return {
-                "errcode": 0,
-                "errmsg": f"最近{days}天没有群聊记录",
-                "group_count": 0,
                 "saved_count": 0,
-                "save_dir": None,
+                "save_path": None,
+                "save_dir": save_dir,
                 "files": [],
+                "messages": [],
             }
 
-        base_save_dir = settings.chat_archive_save_dir
-        archive_dir = os.path.join(
-            base_save_dir, f"group_archive_{begin_time}_{end_time}"
-        )
-        Path(archive_dir).mkdir(parents=True, exist_ok=True)
-
         saved_files: List[Dict[str, Any]] = []
-        total_messages = 0
+        all_messages: List[Dict[str, Any]] = []
+
         for group_id, items in group_messages.items():
             items.sort(key=lambda x: x.get("msgtime") or 0)
-            filename = f"group_{self._safe_group_filename(group_id)}.json"
-            file_path = os.path.join(archive_dir, filename)
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(items, f, ensure_ascii=False, indent=2)
+            chat_name = items[0].get("chat_name") if items else None
+            if not chat_name:
+                chat_info = self._get_chat_info(group_id)
+                if chat_info:
+                    chat_name = chat_info.get("name")
 
-            total_messages += len(items)
+            safe_chat_name = self._safe_chat_name(chat_name)
+            safe_group_id = self._safe_group_id(group_id)
+            filename = f"{safe_chat_name}+{safe_group_id}.json"
+            file_path = os.path.join(save_dir, filename)
+
+            messages = [item.get("message", {}) for item in items]
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(messages, f, ensure_ascii=False, indent=2)
+
+            all_messages.extend(messages)
             saved_files.append(
                 {
                     "group_id": group_id,
-                    "count": len(items),
+                    "chat_name": chat_name,
+                    "count": len(messages),
                     "save_path": file_path,
                 }
             )
 
         saved_files.sort(key=lambda x: x["count"], reverse=True)
+        primary_path = saved_files[0]["save_path"] if len(saved_files) == 1 else None
+
         return {
-            "errcode": 0,
-            "errmsg": "ok",
-            "days": days,
-            "group_count": len(saved_files),
-            "saved_count": total_messages,
-            "save_dir": archive_dir,
+            "saved_count": len(all_messages),
+            "save_path": primary_path,
+            "save_dir": save_dir,
             "files": saved_files,
+            "messages": all_messages,
         }
 
 
