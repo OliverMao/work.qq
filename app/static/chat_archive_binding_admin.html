@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>会话存档群聊绑定管理</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    :root {
+      --bg-1: #f6f2ea;
+      --bg-2: #efe2d0;
+      --panel: #fffaf2;
+      --ink: #1f2a2e;
+      --subtle: #5e6b70;
+      --line: #dfd1be;
+      --brand: #17706e;
+      --brand-2: #0f4f62;
+      --danger: #b7422e;
+      --ok: #1f7a45;
+      --warn: #9f6b0d;
+      --shadow: 0 16px 36px rgba(42, 42, 42, 0.14);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(23, 112, 110, 0.12), transparent 34%),
+        radial-gradient(circle at 82% 20%, rgba(183, 66, 46, 0.12), transparent 36%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+      padding: 24px 14px 36px;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+      letter-spacing: 0.3px;
+      font-weight: 800;
+      color: #13363c;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--subtle);
+      font-size: 14px;
+    }
+
+    .status-pill {
+      border-radius: 999px;
+      padding: 8px 14px;
+      background: rgba(23, 112, 110, 0.1);
+      color: var(--brand-2);
+      font-size: 13px;
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .field label {
+      font-size: 13px;
+      color: #304046;
+      font-weight: 600;
+    }
+
+    .field input {
+      border: 1px solid #ccbda8;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease;
+      width: 100%;
+    }
+
+    .field input:focus {
+      border-color: #2f7d79;
+      box-shadow: 0 0 0 3px rgba(23, 112, 110, 0.14);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .1s ease, box-shadow .2s ease, opacity .2s ease;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(15, 79, 98, 0.22);
+    }
+
+    .btn.neutral {
+      background: #e8ddd0;
+      color: #3a4347;
+    }
+
+    .btn.danger {
+      background: #f8dbd4;
+      color: #7a2418;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid #d9c8b2;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    thead th {
+      text-align: left;
+      font-size: 13px;
+      letter-spacing: .2px;
+      color: #33454a;
+      background: #f5ede2;
+      border-bottom: 1px solid #d9c8b2;
+      padding: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody td {
+      padding: 12px;
+      font-size: 14px;
+      border-bottom: 1px solid #eee3d2;
+      vertical-align: top;
+    }
+
+    tbody tr:hover {
+      background: #fff8ef;
+    }
+
+    .roomid {
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      font-size: 13px;
+      color: #24454e;
+      word-break: break-all;
+    }
+
+    .muted {
+      color: #6e7a7f;
+      font-size: 12px;
+    }
+
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .edit-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 240px;
+    }
+
+    .edit-row input {
+      flex: 1;
+      min-width: 120px;
+      border: 1px solid #c8b79f;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+
+    .message {
+      margin-top: 12px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      border: 1px solid transparent;
+    }
+
+    .message.ok {
+      background: #e8f6eb;
+      color: #19592f;
+      border-color: #bcdfc5;
+    }
+
+    .message.error {
+      background: #fdebea;
+      color: #7e2a1e;
+      border-color: #f2c6bf;
+    }
+
+    .message.warn {
+      background: #fff3dd;
+      color: #73540a;
+      border-color: #eed8a9;
+    }
+
+    .empty {
+      padding: 30px 18px;
+      text-align: center;
+      color: #6a777c;
+      font-size: 14px;
+    }
+
+    .count {
+      font-size: 13px;
+      color: #4e5d62;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .title {
+        font-size: 25px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        width: 100%;
+      }
+
+      .toolbar .btn {
+        width: 100%;
+      }
+
+      .status-pill {
+        align-self: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="container">
+    <header class="hero">
+      <div>
+        <h1 class="title">会话存档群聊绑定管理</h1>
+        <div class="subtitle">管理 roomid 与群聊名称的绑定关系，支持增删改查与关键字过滤。</div>
+      </div>
+      <div class="status-pill">共 {{ totalCount }} 条绑定</div>
+    </header>
+
+    <section class="card">
+      <div class="grid">
+        <div class="field">
+          <label for="roomid">roomid</label>
+          <input id="roomid" v-model.trim="createForm.roomid" placeholder="例如: wrXxx123" />
+        </div>
+        <div class="field">
+          <label for="room-name">群聊名称</label>
+          <input id="room-name" v-model.trim="createForm.room_name" placeholder="例如: 运营讨论群" />
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" :disabled="loading.create" @click="createBinding">
+            {{ loading.create ? "保存中..." : "新增绑定" }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="grid" style="grid-template-columns: 1fr auto auto;">
+        <div class="field">
+          <label for="keyword">关键字</label>
+          <input id="keyword" v-model.trim="keywordInput" placeholder="按 roomid 或群聊名称筛选" @keyup.enter="applyFilter" />
+        </div>
+        <div class="toolbar">
+          <button class="btn neutral" :disabled="loading.list" @click="applyFilter">查询</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn neutral" :disabled="loading.list" @click="refreshList">刷新</button>
+        </div>
+      </div>
+
+      <div class="count">当前筛选: {{ keyword || "全部" }}</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 26%;">roomid</th>
+              <th style="width: 24%;">群聊名称</th>
+              <th style="width: 18%;">创建时间</th>
+              <th style="width: 18%;">更新时间</th>
+              <th style="width: 14%;">操作</th>
+            </tr>
+          </thead>
+          <tbody v-if="items.length > 0">
+            <tr v-for="item in items" :key="item.roomid">
+              <td>
+                <div class="roomid">{{ item.roomid }}</div>
+              </td>
+              <td>
+                <div v-if="editingRoomid !== item.roomid">{{ item.room_name }}</div>
+                <div v-else class="edit-row">
+                  <input v-model.trim="editingRoomName" maxlength="128" />
+                  <button class="btn primary" :disabled="loading.update" @click="saveEdit(item)">
+                    {{ loading.update ? "保存中" : "保存" }}
+                  </button>
+                  <button class="btn neutral" :disabled="loading.update" @click="cancelEdit">取消</button>
+                </div>
+              </td>
+              <td class="muted">{{ formatTime(item.created_at) }}</td>
+              <td class="muted">{{ formatTime(item.updated_at) }}</td>
+              <td>
+                <div class="inline-actions" v-if="editingRoomid !== item.roomid">
+                  <button class="btn neutral" @click="startEdit(item)">编辑</button>
+                  <button class="btn danger" :disabled="loading.delete" @click="deleteBinding(item)">
+                    {{ loading.delete && deletingRoomid === item.roomid ? "删除中" : "删除" }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="items.length === 0" class="empty">
+          {{ loading.list ? "正在加载数据..." : "暂无数据，可先新增一条绑定" }}
+        </div>
+      </div>
+
+      <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
+    </section>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          apiBase: "/chat/archive",
+          items: [],
+          totalCount: 0,
+          keyword: "",
+          keywordInput: "",
+          editingRoomid: "",
+          editingRoomName: "",
+          deletingRoomid: "",
+          createForm: {
+            roomid: "",
+            room_name: "",
+          },
+          loading: {
+            list: false,
+            create: false,
+            update: false,
+            delete: false,
+          },
+          message: {
+            text: "",
+            type: "ok",
+          },
+        };
+      },
+      mounted() {
+        this.refreshList();
+      },
+      methods: {
+        setMessage(text, type = "ok") {
+          this.message.text = text;
+          this.message.type = type;
+        },
+        clearMessage() {
+          this.message.text = "";
+          this.message.type = "ok";
+        },
+        formatTime(value) {
+          if (!value) {
+            return "-";
+          }
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) {
+            return value;
+          }
+          return date.toLocaleString("zh-CN", { hour12: false });
+        },
+        async request(url, options = {}) {
+          const resp = await fetch(url, {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            ...options,
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            throw new Error(data.errmsg || "请求失败");
+          }
+          if (data.errcode !== 0) {
+            throw new Error(data.errmsg || "接口返回异常");
+          }
+          return data;
+        },
+        async refreshList() {
+          this.loading.list = true;
+          this.clearMessage();
+          try {
+            const query = this.keyword ? `?keyword=${encodeURIComponent(this.keyword)}` : "";
+            const data = await this.request(`${this.apiBase}/room-bindings${query}`, {
+              method: "GET",
+            });
+            this.items = data.items || [];
+            this.totalCount = data.count || 0;
+          } catch (err) {
+            this.setMessage(String(err.message || err), "error");
+            this.items = [];
+            this.totalCount = 0;
+          } finally {
+            this.loading.list = false;
+          }
+        },
+        async applyFilter() {
+          this.keyword = this.keywordInput.trim();
+          await this.refreshList();
+        },
+        async createBinding() {
+          const roomid = this.createForm.roomid.trim();
+          const roomName = this.createForm.room_name.trim();
+          if (!roomid || !roomName) {
+            this.setMessage("roomid 与群聊名称都不能为空", "warn");
+            return;
+          }
+
+          this.loading.create = true;
+          this.clearMessage();
+          try {
+            await this.request(`${this.apiBase}/room-binding`, {
+              method: "POST",
+              body: JSON.stringify({
+                roomid,
+                room_name: roomName,
+              }),
+            });
+            this.createForm.roomid = "";
+            this.createForm.room_name = "";
+            this.setMessage("新增成功", "ok");
+            await this.refreshList();
+          } catch (err) {
+            this.setMessage(String(err.message || err), "error");
+          } finally {
+            this.loading.create = false;
+          }
+        },
+        startEdit(item) {
+          this.editingRoomid = item.roomid;
+          this.editingRoomName = item.room_name || "";
+          this.clearMessage();
+        },
+        cancelEdit() {
+          this.editingRoomid = "";
+          this.editingRoomName = "";
+        },
+        async saveEdit(item) {
+          const roomName = this.editingRoomName.trim();
+          if (!roomName) {
+            this.setMessage("群聊名称不能为空", "warn");
+            return;
+          }
+
+          this.loading.update = true;
+          this.clearMessage();
+          try {
+            await this.request(`${this.apiBase}/room-binding/${encodeURIComponent(item.roomid)}`, {
+              method: "PUT",
+              body: JSON.stringify({ room_name: roomName }),
+            });
+            this.setMessage("更新成功", "ok");
+            this.cancelEdit();
+            await this.refreshList();
+          } catch (err) {
+            this.setMessage(String(err.message || err), "error");
+          } finally {
+            this.loading.update = false;
+          }
+        },
+        async deleteBinding(item) {
+          const ok = window.confirm(`确定删除绑定?\nroomid: ${item.roomid}`);
+          if (!ok) {
+            return;
+          }
+
+          this.loading.delete = true;
+          this.deletingRoomid = item.roomid;
+          this.clearMessage();
+          try {
+            await this.request(`${this.apiBase}/room-binding/${encodeURIComponent(item.roomid)}`, {
+              method: "DELETE",
+            });
+            this.setMessage("删除成功", "ok");
+            if (this.editingRoomid === item.roomid) {
+              this.cancelEdit();
+            }
+            await this.refreshList();
+          } catch (err) {
+            this.setMessage(String(err.message || err), "error");
+          } finally {
+            this.loading.delete = false;
+            this.deletingRoomid = "";
+          }
+        },
+      },
+    }).mount("#app");
+  </script>
+</body>
+</html>

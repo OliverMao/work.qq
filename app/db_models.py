@@ -4,20 +4,24 @@ SQLAlchemy ORM 模型
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
 
-# class ChatGroupRecord(Base):
-    # """本地群聊记录。"""
+class ChatArchiveRoomBinding(Base):
+    """会话存档群聊绑定：roomid 与群聊名称映射。"""
 
-    # __tablename__ = "chat_groups"
+    __tablename__ = "chat_archive_room_bindings"
 
-    # chatid: Mapped[str] = mapped_column(String(32), primary_key=True, index=True)
-    # name: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    # owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # userlist_json: Mapped[str] = mapped_column(Text, nullable=False)
-    # chat_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    roomid: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    room_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )

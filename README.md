@@ -9,6 +9,8 @@
   - POST `/` — 接收消息/事件
 - **会话内容存档** — 拉取聊天记录并保存到本地
   - POST `/chat/archive` — 拉取并保存会话内容
+  - GET `/chat/archive/room-binding/admin` — roomid 绑定管理界面（Vue）
+  - `/chat/archive/room-binding*` — roomid 绑定增删改查 API
 - **完整的 AES 加解密与签名校验**
 - **被动回复消息**
 - 基于 `pydantic` 的消息模型
@@ -42,6 +44,17 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | 接口 | 方法 | 说明 |
 |---|---|---|
 | `/chat/archive` | POST | 拉取聊天记录并保存为 JSON |
+| `/chat/archive/room-binding/admin` | GET | 打开 roomid 绑定管理界面（Vue） |
+
+### 3. roomid 绑定管理
+
+| 接口 | 方法 | 说明 |
+|---|---|---|
+| `/chat/archive/room-binding` | POST | 新增 roomid 与群聊名绑定 |
+| `/chat/archive/room-binding/{roomid}` | GET | 查询单个绑定 |
+| `/chat/archive/room-bindings` | GET | 查询绑定列表，支持 keyword 过滤 |
+| `/chat/archive/room-binding/{roomid}` | PUT | 更新绑定名称 |
+| `/chat/archive/room-binding/{roomid}` | DELETE | 删除绑定 |
 
 #### 调用示例
 
