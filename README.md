@@ -28,6 +28,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 接口说明
 
+群聊接口文档见：`docs/chat-group-api.md`
+
 ### 1. 消息接收回调
 
 | 接口 | 方法 | 说明 |
@@ -74,7 +76,7 @@ curl -X POST "http://localhost:8000/chat/archive?starttime=1704067200&endtime=17
 | `WECOM_TOKEN` | 回调 Token | ✅ |
 | `WECOM_ENCODING_AES_KEY` | 43位 EncodingAESKey | ✅ |
 | `WECOM_AGENT_ID` | 应用 ID | |
-| `WECOM_CHAT_ARCHIVE_SECRET` | 聊天内容存档 Secret | 会话存档必需 |
+| `WECOM_CORP_SECRET` | 企业应用 Secret（所有接口统一使用） | ✅ |
 | `WECOM_CHAT_ARCHIVE_SAVE_DIR` | 存档保存目录，默认 `archive_data/` | |
 
 ### 获取会话存档配置

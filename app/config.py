@@ -33,13 +33,18 @@ class Settings:
         return int(self._env.get("WECOM_AGENT_ID", "0"))
 
     @property
-    def chat_archive_secret(self) -> str:
-        return self._env.get("WECOM_CHAT_ARCHIVE_SECRET", "")
-
-    @property
     def rsa_private_key_path(self) -> str:
         default = Path(__file__).parent.parent / "keys" / "private.pem"
         return self._env.get("WECOM_RSA_PRIVATE_KEY_PATH", str(default))
+
+    @property
+    def wecom_contact_secret(self) -> str:
+        return self._env.get("WECOM_CONTACT_SECRET", "")
+
+    # WECOM_APP_SECRET
+    @property
+    def app_secret(self) -> str:
+        return self._env.get("WECOM_APP_SECRET", "")
 
     @property
     def chat_archive_save_dir(self) -> str:
@@ -64,7 +69,7 @@ class Settings:
 
     @property
     def corp_secret(self) -> str:
-        return self._env.get("WECOM_CHAT_ARCHIVE_SECRET", "")
+        return self._env.get("WECOM_CORP_SECRET", "")
 
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)

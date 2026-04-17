@@ -6,3 +6,4 @@ python-dotenv
 xmltodict
 typing-extensions
 httpx
+sqlalchemy

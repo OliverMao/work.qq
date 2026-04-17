@@ -5,3 +5,5 @@ __pycache__
 *.pyc
 keys
 sdk
+archive_data
+sql.db

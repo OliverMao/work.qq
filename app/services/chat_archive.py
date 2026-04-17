@@ -6,29 +6,18 @@ import base64
 import json
 import logging
 import os
+import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from ctypes import (
-    Structure,
-    c_int,
-    c_void_p,
-    c_char_p,
-    c_ulonglong,
-    c_ulong,
-    byref,
-    string_at,
-)
 
 import requests
 
 from app.config import settings
+from app.services.wecom_api import wecom_api_client
 
 logger = logging.getLogger(__name__)
-
-
-class Slice(Structure):
-    _fields_ = [("buf", c_void_p), ("len", c_int)]
 
 
 class ChatArchiveService:
@@ -37,55 +26,86 @@ class ChatArchiveService:
     """
 
     def __init__(self):
-        self._lib = None
-        self._sdk = None
+        self._chat_info_cache: Dict[str, Dict[str, Any]] = {}
 
-    def _init_sdk(self):
-        """初始化 SDK"""
-        sdk_lib_path = settings.sdk_lib_path
-        if not sdk_lib_path or not os.path.exists(sdk_lib_path):
+    @staticmethod
+    def _sdktools_path() -> str:
+        env_path = os.getenv("WECOM_SDKTOOLS_PATH", "").strip()
+        if env_path:
+            return env_path
+        return "/www/workqq/work.qq/sdk/C_sdk/sdktools"
+
+    def _resolve_sdktools(self) -> str:
+        sdktools_path = self._sdktools_path()
+        if not os.path.exists(sdktools_path):
             raise FileNotFoundError(
-                f"找不到 SDK 库文件: {sdk_lib_path}\n"
-                f"请下载: https://wwcdn.weixin.qq.com/node/wework/images/sdk_20240606.tgz\n"
-                f"并配置 WECOM_SDK_LIB_PATH 到 .env"
+                f"找不到 sdktools 可执行文件: {sdktools_path}\n"
+                f"请编译 C SDK 并配置 WECOM_SDKTOOLS_PATH 到 .env"
             )
+        if not os.access(sdktools_path, os.X_OK):
+            raise PermissionError(f"sdktools 不可执行: {sdktools_path}")
+        return sdktools_path
 
-        import ctypes
+    @staticmethod
+    def _extract_json_fragment(text: str, marker: str) -> Optional[Dict[str, Any]]:
+        idx = text.find(marker)
+        if idx < 0:
+            return None
+        payload = text[idx + len(marker):].strip()
+        if not payload:
+            return None
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            return None
 
-        lib = ctypes.CDLL(sdk_lib_path)
-
-        lib.NewSdk.restype = c_void_p
-        lib.Init.argtypes = [c_void_p, c_char_p, c_char_p]
-        lib.Init.restype = c_int
-        lib.GetChatData.argtypes = [
-            c_void_p,
-            c_ulonglong,
-            c_ulong,
-            c_char_p,
-            c_char_p,
-            c_int,
-            ctypes.POINTER(Slice),
-        ]
-        lib.GetChatData.restype = c_int
-        lib.DecryptData.argtypes = [
-            c_char_p,
-            c_char_p,
-            ctypes.POINTER(Slice),
-        ]
-        lib.DecryptData.restype = c_int
-        lib.DestroySdk.argtypes = [c_void_p]
-        lib.DestroySdk.restype = None
-
-        sdk = lib.NewSdk()
-        ret = lib.Init(
-            sdk, settings.corp_id.encode(), settings.chat_archive_secret.encode()
-        )
+    @staticmethod
+    def _extract_decrypt_payload(text: str) -> Optional[Dict[str, Any]]:
+        # sdktools 输出格式: chatdata :{...} ret :0
+        match = re.search(r"chatdata\s*:(\{.*\})\s*ret\s*:\s*(-?\d+)", text)
+        if not match:
+            return None
+        ret = int(match.group(2))
         if ret != 0:
-            raise RuntimeError(f"SDK Init 失败, ret={ret}")
+            return None
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return None
 
-        self._lib = lib
-        self._sdk = sdk
-        return lib, sdk
+    def _ensure_sdktools_config(self, sdk_dir: str) -> None:
+        config_path = os.path.join(sdk_dir, "config.txt")
+        corp_id = settings.corp_id.strip()
+        corp_secret = settings.corp_secret.strip()
+        if not corp_id or not corp_secret:
+            raise RuntimeError("WECOM_CORP_ID 或 WECOM_CORP_SECRET 未配置")
+        expected = f"{corp_id}\n{corp_secret}\n"
+        current = ""
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                current = f.read()
+        if current != expected:
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(expected)
+
+    def _run_sdktools(self, args: List[str]) -> str:
+        sdktools_path = self._resolve_sdktools()
+        sdk_dir = str(Path(sdktools_path).parent)
+        self._ensure_sdktools_config(sdk_dir)
+
+        result = subprocess.run(
+            [sdktools_path, *args],
+            cwd=sdk_dir,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        output = (result.stdout or "") + ("\n" + result.stderr if result.stderr else "")
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"sdktools 执行失败, code={result.returncode}, output={output.strip()}"
+            )
+        return output
 
     def _get_rsa_private_key(self) -> str:
         key_path = settings.rsa_private_key_path
@@ -113,41 +133,27 @@ class ChatArchiveService:
             return None
 
     def _pull_decrypted_records(self, limit: int = 1000) -> List[Dict[str, Any]]:
-        """通过 SDK 拉取并解密会话，返回原始聊天元数据 + 解密消息。"""
+        """通过 sdktools 拉取并解密会话，返回原始聊天元数据 + 解密消息。"""
         records: List[Dict[str, Any]] = []
 
         try:
-            logger.info("会话存档使用 SDK 模式")
-            lib, sdk = self._init_sdk()
+            logger.info("会话存档使用 sdktools 模式")
             seq = 0
             while True:
                 logger.info("开始拉取会话: seq=%s, limit=%s", seq, min(limit, 1000))
                 fetch_started = time.time()
-                result_slice = Slice()
-                ret = lib.GetChatData(
-                    sdk,
-                    seq,
-                    min(limit, 1000),
-                    c_char_p(None),
-                    c_char_p(None),
-                    c_int(30),
-                    byref(result_slice),
+                output = self._run_sdktools(
+                    ["1", str(seq), str(min(limit, 1000)), "", "", "30"]
                 )
                 logger.info(
-                    "GetChatData返回: ret=%s, elapsed=%.3fs",
-                    ret,
+                    "sdktools GetChatData返回: elapsed=%.3fs",
                     time.time() - fetch_started,
                 )
-                if ret != 0:
-                    logger.error("GetChatData 失败, ret=%d", ret)
-                    break
 
-                if not result_slice.buf or result_slice.len <= 0:
-                    logger.error("GetChatData 返回成功但 Slice 为空")
+                chat_json = self._extract_json_fragment(output, "data:")
+                if chat_json is None:
+                    logger.error("无法解析 sdktools GetChatData 输出: %s", output)
                     break
-
-                raw_text = string_at(result_slice.buf, result_slice.len).decode("utf-8")
-                chat_json = json.loads(raw_text)
                 if chat_json.get("errcode", 0) != 0:
                     logger.error("GetChatData API 错误: %s", chat_json)
                     break
@@ -164,32 +170,22 @@ class ChatArchiveService:
                         logger.warning("RSA 解密失败, msgid=%s", chat.get("msgid"))
                         continue
 
-                    decrypt_slice = Slice()
-                    ret = lib.DecryptData(
-                        c_char_p(encrypt_key.encode()),
-                        c_char_p(chat.get("encrypt_chat_msg", "").encode()),
-                        byref(decrypt_slice),
-                    )
-                    if ret != 0:
-                        logger.warning(
-                            "DecryptData 失败, ret=%d, msgid=%s", ret, chat.get("msgid")
+                    dec_payload = self._extract_decrypt_payload(
+                        self._run_sdktools(
+                            [
+                                "3",
+                                encrypt_key,
+                                chat.get("encrypt_chat_msg", ""),
+                            ]
                         )
-                        continue
-
-                    if not decrypt_slice.buf or decrypt_slice.len <= 0:
-                        logger.warning(
-                            "DecryptData 返回成功但 Slice 为空, msgid=%s",
-                            chat.get("msgid"),
-                        )
-                        continue
-
-                    dec_text = string_at(decrypt_slice.buf, decrypt_slice.len).decode(
-                        "utf-8"
                     )
+                    if dec_payload is None:
+                        logger.warning("DecryptData 失败, msgid=%s", chat.get("msgid"))
+                        continue
                     records.append(
                         {
                             "chat": chat,
-                            "message": json.loads(dec_text),
+                            "message": dec_payload,
                         }
                     )
 
@@ -201,25 +197,8 @@ class ChatArchiveService:
 
         except Exception as e:
             raise RuntimeError(f"SDK 拉取失败: {e}") from e
-        finally:
-            try:
-                if self._lib is not None and self._sdk:
-                    self._lib.DestroySdk(self._sdk)
-                    self._lib = None
-                    self._sdk = None
-            except Exception:
-                pass
-
         return records
 
-    @staticmethod
-    def _extract_chat_name(message: Dict[str, Any]) -> Optional[str]:
-        """从消息中提取会话名称"""
-        for key in ("room_name", "chat_name", "name", "conversation_name"):
-            value = message.get(key)
-            if value:
-                return str(value)
-        return None
 
     @staticmethod
     def _safe_roomid(roomid: str) -> str:
@@ -241,50 +220,61 @@ class ChatArchiveService:
             safe = "unknown_chat"
         return safe[:80]
 
-    def _get_access_token(self) -> Optional[str]:
-        """获取企业微信access_token"""
-        if hasattr(self, "_cached_token") and hasattr(self, "_token_expires_at"):
-            if time.time() < self._token_expires_at:
-                return self._cached_token
+    @staticmethod
+    def _load_messages_from_file(file_path: Path) -> List[Dict[str, Any]]:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        return []
 
-        url = f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid={settings.corp_id}&corpsecret={settings.corp_secret}"
-        try:
-            resp = requests.get(url, timeout=10)
-            data = resp.json()
-            if data.get("errcode") == 0:
-                self._cached_token = data.get("access_token")
-                self._token_expires_at = (
-                    time.time() + data.get("expires_in", 7200) - 300
-                )
-                return self._cached_token
-            logger.error("获取access_token失败: %s", data)
-        except Exception as e:
-            logger.error("获取access_token异常: %s", e)
-        return None
+    def get_group_archived_messages(self, roomid: str) -> Dict[str, Any]:
+        """读取指定群聊(roomid)的全部本地存档消息。"""
+        roomid = str(roomid or "").strip()
+        if not roomid:
+            raise ValueError("roomid 不能为空")
 
-    def _get_chat_info(self, chat_id: str) -> Optional[Dict[str, Any]]:
-        """获取群聊会话信息"""
-        if hasattr(self, "_chat_info_cache") and chat_id in self._chat_info_cache:
-            return self._chat_info_cache[chat_id]
+        save_dir = Path(settings.chat_archive_save_dir)
+        if not save_dir.exists():
+            raise FileNotFoundError(f"存档目录不存在: {save_dir}")
 
-        token = self._get_access_token()
-        if not token:
-            return None
-        url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/get?access_token={token}&roomid={chat_id}"
-        try:
-            resp = requests.get(url, timeout=10)
-            data = resp.json()
-            print(data)
-            if data.get("errcode") == 0:
-                chat_info = data.get("chat_info")
-                if not hasattr(self, "_chat_info_cache"):
-                    self._chat_info_cache = {}
-                self._chat_info_cache[chat_id] = chat_info
-                return chat_info
-            logger.error("获取群聊信息失败: %s", data)
-        except Exception as e:
-            logger.error("获取群聊信息异常: %s", e)
-        return None
+        safe_roomid = self._safe_roomid(roomid)
+        candidate_files: List[Path] = []
+
+        # 当前实现默认使用 roomid.json 命名
+        default_file = save_dir / f"{safe_roomid}.json"
+        if default_file.exists():
+            candidate_files.append(default_file)
+
+        # 兼容历史命名: unknown_chat+<roomid>.json
+        legacy_patterns = [
+            f"*+{roomid}.json",
+            f"*+{safe_roomid}.json",
+        ]
+        for pattern in legacy_patterns:
+            for matched in sorted(save_dir.glob(pattern)):
+                if matched.is_file() and matched not in candidate_files:
+                    candidate_files.append(matched)
+
+        if not candidate_files:
+            raise FileNotFoundError(f"未找到群聊存档文件: roomid={roomid}")
+
+        all_messages: List[Dict[str, Any]] = []
+        for file_path in candidate_files:
+            try:
+                all_messages.extend(self._load_messages_from_file(file_path))
+            except Exception as e:
+                logger.warning("读取存档文件失败: %s, error=%s", file_path, e)
+
+        all_messages.sort(key=lambda item: int(item.get("msgtime", 0) or 0))
+        return {
+            "roomid": roomid,
+            "count": len(all_messages),
+            "files": [str(path) for path in candidate_files],
+            "messages": all_messages,
+        }
+
+
 
     def archive_messages(
         self,
@@ -313,29 +303,26 @@ class ChatArchiveService:
         Path(save_dir).mkdir(parents=True, exist_ok=True)
 
         records = self._pull_decrypted_records(limit=limit)
-        print(f"拉取到 {len(records)} 条会话记录，开始处理...",records)
         group_messages: Dict[str, List[Dict[str, Any]]] = {}
 
         for record in records:
             chat = record.get("chat", {})
             message = record.get("message", {})
+            # print(record)
             msg_time = int(chat.get("msgtime", message.get("msgtime", 0)) or 0)
 
 
             roomid = message.get("roomid")
             if not roomid:
                 continue
-
-            chat_name = self._extract_chat_name(message)
+        
             group_messages.setdefault(roomid, []).append(
                 {
                     "msgid": chat.get("msgid"),
                     "action": chat.get("action"),
                     "from": chat.get("from"),
                     "tolist": chat.get("tolist"),
-                    "roomid": chat.get("roomid", message.get("roomid")),
-                    "roomid": chat.get("roomid", message.get("roomid")),
-                    "chat_name": chat_name,
+                    "roomid": message.get("roomid"),
                     "msgtime": msg_time,
                     "message": message,
                 }
@@ -356,13 +343,9 @@ class ChatArchiveService:
 
         for roomid, items in group_messages.items():
             items.sort(key=lambda x: x.get("msgtime") or 0)
-            chat_info = self._get_chat_info(roomid)
-            if chat_info:
-                chat_name = chat_info.get("name")
 
-            safe_chat_name = self._safe_chat_name(chat_name)
             safe_roomid = self._safe_roomid(roomid)
-            filename = f"{safe_chat_name}+{safe_roomid}.json"
+            filename = f"{safe_roomid}.json"
             file_path = os.path.join(save_dir, filename)
 
             messages = [item.get("message", {}) for item in items]
@@ -373,7 +356,6 @@ class ChatArchiveService:
             saved_files.append(
                 {
                     "roomid": roomid,
-                    "chat_name": chat_name,
                     "count": len(messages),
                     "save_path": file_path,
                 }
