@@ -2,20 +2,30 @@
 企业微信会话存档服务
 """
 
+import argparse
 import base64
 import json
 import logging
 import os
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import requests
 
-from app.config import settings
-from app.services.wecom_api import wecom_api_client
+try:
+    from app.config import settings
+    from app.services.wecom_api import wecom_api_client
+except ModuleNotFoundError:
+    # 兼容直接运行本文件: python app/services/chat_archive.py
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    from app.config import settings
+    from app.services.wecom_api import wecom_api_client
 
 logger = logging.getLogger(__name__)
 
@@ -374,3 +384,47 @@ class ChatArchiveService:
 
 
 chat_archive_service = ChatArchiveService()
+
+
+def _build_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="测试企业微信会话存档 archive_messages 功能"
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=1000,
+        help="拉取条数上限，最大1000，默认1000",
+    )
+    return parser
+
+
+def _run_main() -> None:
+    parser = _build_cli_parser()
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+
+    service = ChatArchiveService()
+    limit = max(1, min(int(args.limit), 1000))
+
+    print("=== 测试: archive_messages ===")
+    save_result = service.archive_messages(limit=limit)
+    print(
+        json.dumps(
+            {
+                "saved_count": save_result.get("saved_count", 0),
+                "save_dir": save_result.get("save_dir"),
+                "files": save_result.get("files", []),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+if __name__ == "__main__":
+    _run_main()

@@ -1,5 +1,5 @@
 """
-群聊管理路由
+企业微信内部群聊管理路由，目前暂时禁用
 """
 
 from typing import List, Optional
@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.services.chat_group import chat_group_service
+from app.services.chat_group_in import chat_group_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
