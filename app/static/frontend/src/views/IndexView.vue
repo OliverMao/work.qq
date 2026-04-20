@@ -4,11 +4,11 @@
       <n-space vertical :size="14">
         <div class="section-title-row">
           <div>
-            <h3 class="section-title">会话拉取</h3>
-            <p class="desc-text">点击“拉取会话”调用 /chat/archive，后端会按 msgid 去重后增量写入本地 JSON 存档。</p>
+            <h3 class="section-title">会话同步</h3>
+            <p class="desc-text">点击“同步会话”调用 /chat/archive，后端会按 msgid 去重后增量写入本地 JSON 存档。</p>
           </div>
           <n-button type="primary" :loading="loading.pull" @click="handlePullArchive">
-            {{ loading.pull ? "拉取中..." : "拉取会话" }}
+            {{ loading.pull ? "同步中..." : "同步会话" }}
           </n-button>
         </div>
 
@@ -22,7 +22,7 @@
       <p class="desc-text">保存消息数表示本次新增落盘数量，跳过重复数表示按 msgid 去重后未重复写入的数量。</p>
     </n-card>
 
-    <n-card v-if="lastResult" title="本次拉取结果">
+    <n-card v-if="lastResult" title="本次同步结果">
       <div class="metric-grid">
         <div class="metric-box">
           <div class="metric-label">保存消息数</div>
@@ -98,7 +98,7 @@ async function handlePullArchive() {
   try {
     const data = await pullArchive();
     lastResult.value = data;
-    setMessage('拉取成功', 'ok');
+    setMessage('同步成功', 'ok');
   } catch (err) {
     setMessage(String(err.message || err), 'error');
   } finally {
