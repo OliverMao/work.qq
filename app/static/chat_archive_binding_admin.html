@@ -407,6 +407,51 @@
       background: #f2f9f8 !important;
     }
 
+    .modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(27, 36, 39, 0.5);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal-panel {
+      width: min(980px, 100%);
+      max-height: 90vh;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(27, 36, 39, 0.32);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #e5d9c7;
+      background: #fbf6ee;
+    }
+
+    .modal-title {
+      margin: 0;
+      font-size: 19px;
+      color: #17373f;
+    }
+
+    .modal-body {
+      padding: 16px;
+      overflow: auto;
+    }
+
     @media (max-width: 860px) {
       .hero {
         flex-direction: column;
@@ -544,33 +589,38 @@
       <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
     </section>
 
-    <section class="card" v-if="selectedModule">
-      <div class="viewer-head">
-        <div>
-          <h2 class="viewer-title">群聊内容查看</h2>
-          <div class="muted">文件: {{ selectedModule.filename }} | roomid: {{ selectedModule.roomid }}</div>
-        </div>
-        <div class="status-pill">共 {{ selectedCount }} 条消息</div>
-      </div>
-
-      <div class="meta-row">
-        <span>绑定名称: {{ selectedModule.room_name || "未绑定" }}</span>
-        <span>最近消息时间: {{ formatUnixTime(selectedLatestMsgtime) }}</span>
-      </div>
-
-      <div class="message-list" v-if="selectedMessages.length > 0">
-        <div class="message-item" v-for="(msg, idx) in selectedMessages" :key="idx">
-          <div class="message-top">
-            <span>#{{ idx + 1 }}</span>
-            <span>msgtime: {{ formatUnixTime(msg.msgtime) }}</span>
+    <div class="modal-mask" v-if="showViewer" @click.self="closeViewer">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title">群聊内容查看</h2>
+            <div class="muted">文件: {{ selectedModule ? selectedModule.filename : '-' }} | roomid: {{ selectedModule ? selectedModule.roomid : '-' }}</div>
           </div>
-          <pre class="message-json">{{ toPrettyJson(msg) }}</pre>
+          <button class="btn neutral small" @click="closeViewer">关闭</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="meta-row">
+            <span>绑定名称: {{ selectedModule ? (selectedModule.room_name || "未绑定") : "未绑定" }}</span>
+            <span>最近消息时间: {{ formatUnixTime(selectedLatestMsgtime) }}</span>
+            <span>消息总数: {{ selectedCount }}</span>
+          </div>
+
+          <div class="message-list" v-if="selectedMessages.length > 0">
+            <div class="message-item" v-for="(msg, idx) in selectedMessages" :key="idx">
+              <div class="message-top">
+                <span>#{{ idx + 1 }}</span>
+                <span>msgtime: {{ formatUnixTime(msg.msgtime) }}</span>
+              </div>
+              <pre class="message-json">{{ toPrettyJson(msg) }}</pre>
+            </div>
+          </div>
+          <div class="empty" v-else>
+            {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无消息" }}
+          </div>
         </div>
       </div>
-      <div class="empty" v-else>
-        {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无消息" }}
-      </div>
-    </section>
+    </div>
   </div>
 
   <script>
@@ -588,6 +638,7 @@
           keywordInput: "",
           editRoomNames: {},
           selectedModule: null,
+          showViewer: false,
           selectedMessages: [],
           selectedCount: 0,
           selectedLatestMsgtime: null,
@@ -709,6 +760,10 @@
           };
         },
 
+        closeViewer() {
+          this.showViewer = false;
+        },
+
         async saveBinding(item) {
           const roomName = (this.editRoomNames[item.roomid] || "").trim();
           if (!roomName) {
@@ -768,6 +823,7 @@
 
         async viewModuleMessages(item) {
           this.selectedModule = item;
+          this.showViewer = true;
           this.loading.messages = true;
           this.clearMessage();
           try {

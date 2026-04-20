@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple, Set
 
 import requests
 
@@ -142,9 +142,15 @@ class ChatArchiveService:
             logger.error("RSA 解密失败: %s", e)
             return None
 
-    def _pull_decrypted_records(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    def _pull_decrypted_records(
+        self,
+        limit: int = 1000,
+        known_msgids: Optional[Set[str]] = None,
+    ) -> Tuple[List[Dict[str, Any]], int]:
         """通过 sdktools 拉取并解密会话，返回原始聊天元数据 + 解密消息。"""
         records: List[Dict[str, Any]] = []
+        skip_duplicate_count = 0
+        known_msgid_set = set(known_msgids or set())
 
         try:
             logger.info("会话存档使用 sdktools 模式")
@@ -175,6 +181,11 @@ class ChatArchiveService:
                     break
 
                 for chat in chat_list:
+                    msgid = str(chat.get("msgid") or "").strip()
+                    if msgid and msgid in known_msgid_set:
+                        skip_duplicate_count += 1
+                        continue
+
                     encrypt_key = self.rsa_decrypt(chat.get("encrypt_random_key", ""))
                     if not encrypt_key:
                         logger.warning("RSA 解密失败, msgid=%s", chat.get("msgid"))
@@ -192,6 +203,13 @@ class ChatArchiveService:
                     if dec_payload is None:
                         logger.warning("DecryptData 失败, msgid=%s", chat.get("msgid"))
                         continue
+
+                    if msgid and not str(dec_payload.get("msgid") or "").strip():
+                        dec_payload["msgid"] = msgid
+
+                    if msgid:
+                        known_msgid_set.add(msgid)
+
                     records.append(
                         {
                             "chat": chat,
@@ -207,7 +225,13 @@ class ChatArchiveService:
 
         except Exception as e:
             raise RuntimeError(f"SDK 拉取失败: {e}") from e
-        return records
+
+        logger.info(
+            "会话拉取结束: decrypt_count=%s, skip_duplicate_count=%s",
+            len(records),
+            skip_duplicate_count,
+        )
+        return records, skip_duplicate_count
 
 
     @staticmethod
@@ -237,6 +261,43 @@ class ChatArchiveService:
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
         return []
+
+    @staticmethod
+    def _extract_msgid(message: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(message, dict):
+            return None
+        msgid = message.get("msgid")
+        if msgid is None:
+            msgid = message.get("msg_id")
+        if msgid is None:
+            return None
+        value = str(msgid).strip()
+        return value or None
+
+    def _collect_existing_msgids(self, save_dir: Path) -> Set[str]:
+        if not save_dir.exists():
+            return set()
+
+        file_paths = [path for path in save_dir.glob("*.json") if path.is_file()]
+        msgids: Set[str] = set()
+        for file_path in file_paths:
+            try:
+                messages = self._load_messages_from_file(file_path)
+            except Exception as e:
+                logger.warning("读取存档文件失败: %s, error=%s", file_path, e)
+                continue
+
+            for message in messages:
+                msgid = self._extract_msgid(message)
+                if msgid:
+                    msgids.add(msgid)
+
+        logger.info(
+            "读取本地msgid索引完成: files=%s, msgids=%s",
+            len(file_paths),
+            len(msgids),
+        )
+        return msgids
 
     def get_group_archived_messages(self, roomid: str) -> Dict[str, Any]:
         """读取指定群聊(roomid)的全部本地存档消息。"""
@@ -442,33 +503,32 @@ class ChatArchiveService:
 
 
         save_dir = settings.chat_archive_save_dir
-        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        save_dir_path = Path(save_dir)
+        save_dir_path.mkdir(parents=True, exist_ok=True)
 
-        records = self._pull_decrypted_records(limit=limit)
+        existing_msgids = self._collect_existing_msgids(save_dir_path)
+
+        records, skip_duplicate_count = self._pull_decrypted_records(
+            limit=limit,
+            known_msgids=existing_msgids,
+        )
+
         group_messages: Dict[str, List[Dict[str, Any]]] = {}
 
         for record in records:
             chat = record.get("chat", {})
             message = record.get("message", {})
-            # print(record)
-            msg_time = int(chat.get("msgtime", message.get("msgtime", 0)) or 0)
 
-
-            roomid = message.get("roomid")
+            roomid = str(message.get("roomid") or "").strip()
             if not roomid:
                 continue
+
+            msgid = str(chat.get("msgid") or self._extract_msgid(message) or "").strip()
+            if msgid and not self._extract_msgid(message):
+                message = dict(message)
+                message["msgid"] = msgid
         
-            group_messages.setdefault(roomid, []).append(
-                {
-                    "msgid": chat.get("msgid"),
-                    "action": chat.get("action"),
-                    "from": chat.get("from"),
-                    "tolist": chat.get("tolist"),
-                    "roomid": message.get("roomid"),
-                    "msgtime": msg_time,
-                    "message": message,
-                }
-            )
+            group_messages.setdefault(roomid, []).append(message)
 
         if not group_messages:
             logger.info("会话存档完成: 没有可保存的消息")
@@ -476,42 +536,88 @@ class ChatArchiveService:
                 "saved_count": 0,
                 "save_path": None,
                 "save_dir": save_dir,
+                "skip_duplicate_count": skip_duplicate_count,
                 "files": [],
                 "messages": [],
             }
 
         saved_files: List[Dict[str, Any]] = []
-        all_messages: List[Dict[str, Any]] = []
+        all_new_messages: List[Dict[str, Any]] = []
+        saved_count = 0
+        merge_duplicate_count = 0
 
         for roomid, items in group_messages.items():
-            items.sort(key=lambda x: x.get("msgtime") or 0)
+            items.sort(key=lambda x: int(x.get("msgtime", 0) or 0))
 
             safe_roomid = self._safe_roomid(roomid)
             filename = f"{safe_roomid}.json"
             file_path = os.path.join(save_dir, filename)
+            file_path_obj = Path(file_path)
 
-            messages = [item.get("message", {}) for item in items]
+            existing_messages: List[Dict[str, Any]] = []
+            existing_msgids_in_room: Set[str] = set()
+            if file_path_obj.exists():
+                try:
+                    existing_messages = self._load_messages_from_file(file_path_obj)
+                except Exception as e:
+                    logger.warning("读取历史群聊存档失败: %s, error=%s", file_path_obj, e)
+                    existing_messages = []
+
+                for message in existing_messages:
+                    existing_msgid = self._extract_msgid(message)
+                    if existing_msgid:
+                        existing_msgids_in_room.add(existing_msgid)
+
+            new_messages: List[Dict[str, Any]] = []
+            for message in items:
+                msgid = self._extract_msgid(message)
+                if msgid and msgid in existing_msgids_in_room:
+                    merge_duplicate_count += 1
+                    continue
+
+                if msgid:
+                    existing_msgids_in_room.add(msgid)
+                new_messages.append(message)
+
+            if not new_messages:
+                saved_files.append(
+                    {
+                        "roomid": roomid,
+                        "count": 0,
+                        "total_count": len(existing_messages),
+                        "save_path": file_path,
+                    }
+                )
+                continue
+
+            merged_messages = existing_messages + new_messages
+            merged_messages.sort(key=lambda x: int(x.get("msgtime", 0) or 0))
+
             with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(messages, f, ensure_ascii=False, indent=2)
+                json.dump(merged_messages, f, ensure_ascii=False, indent=2)
 
-            all_messages.extend(messages)
+            saved_count += len(new_messages)
+            all_new_messages.extend(new_messages)
             saved_files.append(
                 {
                     "roomid": roomid,
-                    "count": len(messages),
+                    "count": len(new_messages),
+                    "total_count": len(merged_messages),
                     "save_path": file_path,
                 }
             )
 
         saved_files.sort(key=lambda x: x["count"], reverse=True)
-        primary_path = saved_files[0]["save_path"] if len(saved_files) == 1 else None
+        non_empty_files = [item for item in saved_files if int(item.get("count", 0)) > 0]
+        primary_path = non_empty_files[0]["save_path"] if len(non_empty_files) == 1 else None
 
         return {
-            "saved_count": len(all_messages),
+            "saved_count": saved_count,
+            "skip_duplicate_count": skip_duplicate_count + merge_duplicate_count,
             "save_path": primary_path,
             "save_dir": save_dir,
             "files": saved_files,
-            "messages": all_messages,
+            "messages": all_new_messages,
         }
 
 

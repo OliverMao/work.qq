@@ -63,8 +63,9 @@ async def chat_archive():
         logger.info("收到会话存档请求")
         result = chat_archive_service.archive_messages()
         logger.info(
-            "会话存档完成: saved_count=%s, save_path=%s",
+            "会话存档完成: saved_count=%s, skip_duplicate_count=%s, save_path=%s",
             result.get("saved_count", 0),
+            result.get("skip_duplicate_count", 0),
             result.get("save_path"),
         )
 

@@ -186,7 +186,7 @@
 
     .result-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 10px;
     }
@@ -291,6 +291,10 @@
           <div class="metric">
             <div class="label">保存消息数</div>
             <div class="value">{{ lastResult.saved_count || 0 }}</div>
+          </div>
+          <div class="metric">
+            <div class="label">跳过重复数</div>
+            <div class="value">{{ lastResult.skip_duplicate_count || 0 }}</div>
           </div>
           <div class="metric">
             <div class="label">文件模块数</div>

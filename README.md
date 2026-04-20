@@ -79,6 +79,7 @@ curl -X POST "http://localhost:8000/chat/archive?starttime=1704067200&endtime=17
   "errcode": 0,
   "errmsg": "ok",
   "saved_count": 123,
+  "skip_duplicate_count": 456,
   "save_path": "archive_data/archive_20240101_120000_20240102_120000.json",
   "messages": [
     {"seq": 1, "msgid": "...", "roomid": "...", ...},
