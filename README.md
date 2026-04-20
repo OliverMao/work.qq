@@ -50,6 +50,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 | 接口 | 方法 | 说明 |
 |---|---|---|
+| `/chat/archive/group-modules` | GET | 按本地 JSON 文件列出模块并返回绑定关系 |
+| `/chat/archive/group-module/{filename}` | GET | 按 JSON 文件名查看模块详情与消息内容 |
 | `/chat/archive/room-binding` | POST | 新增 roomid 与群聊名绑定 |
 | `/chat/archive/room-binding/{roomid}` | GET | 查询单个绑定 |
 | `/chat/archive/room-bindings` | GET | 查询绑定列表，支持 keyword 过滤 |

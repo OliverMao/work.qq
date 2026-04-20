@@ -7,18 +7,18 @@
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
     :root {
-      --bg-1: #f6f2ea;
-      --bg-2: #efe2d0;
+      --bg-1: #f4efe6;
+      --bg-2: #e9dbc4;
       --panel: #fffaf2;
-      --ink: #1f2a2e;
-      --subtle: #5e6b70;
-      --line: #dfd1be;
-      --brand: #17706e;
-      --brand-2: #0f4f62;
-      --danger: #b7422e;
-      --ok: #1f7a45;
-      --warn: #9f6b0d;
-      --shadow: 0 16px 36px rgba(42, 42, 42, 0.14);
+      --ink: #1b2427;
+      --subtle: #5f6b70;
+      --line: #ddceb8;
+      --brand: #186f70;
+      --brand-2: #0f5267;
+      --danger: #ab3e2c;
+      --ok: #176f3f;
+      --warn: #91610d;
+      --shadow: 0 16px 38px rgba(27, 36, 39, 0.14);
       --radius: 16px;
     }
 
@@ -41,6 +41,10 @@
     .container {
       max-width: 1080px;
       margin: 0 auto;
+    }
+
+    .surface {
+      position: relative;
     }
 
     .hero {
@@ -159,9 +163,21 @@
       color: #3a4347;
     }
 
+    .btn.ok {
+      background: #d7eedc;
+      color: #16552d;
+    }
+
     .btn.danger {
       background: #f8dbd4;
       color: #7a2418;
+    }
+
+    .btn.small {
+      padding: 7px 10px;
+      font-size: 12px;
+      border-radius: 8px;
+      font-weight: 700;
     }
 
     .table-wrap {
@@ -174,7 +190,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 760px;
+      min-width: 920px;
     }
 
     thead th {
@@ -208,6 +224,33 @@
       word-break: break-all;
     }
 
+    .filename {
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      font-size: 13px;
+      color: #1f4b55;
+    }
+
+    .chip {
+      display: inline-block;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      padding: 6px 9px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      margin-bottom: 6px;
+    }
+
+    .chip.bound {
+      background: #dbf0df;
+      color: #1d6838;
+    }
+
+    .chip.unbound {
+      background: #fff1dc;
+      color: #865d0b;
+    }
+
     .muted {
       color: #6e7a7f;
       font-size: 12px;
@@ -224,7 +267,7 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      min-width: 240px;
+      min-width: 250px;
     }
 
     .edit-row input {
@@ -275,6 +318,77 @@
       margin-bottom: 10px;
     }
 
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #49595f;
+    }
+
+    .viewer-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .viewer-title {
+      margin: 0;
+      font-size: 20px;
+      color: #17373f;
+    }
+
+    .message-list {
+      max-height: 420px;
+      overflow: auto;
+      border: 1px solid #e4d8c7;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .message-item {
+      padding: 10px 12px;
+      border-bottom: 1px solid #efe4d4;
+    }
+
+    .message-item:last-child {
+      border-bottom: 0;
+    }
+
+    .message-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: #55666c;
+      font-size: 12px;
+    }
+
+    .message-json {
+      margin: 0;
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #243b43;
+      background: #f9f4eb;
+      border: 1px solid #e8dccb;
+      border-radius: 8px;
+      padding: 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .selected-row {
+      background: #f2f9f8 !important;
+    }
+
     @media (max-width: 860px) {
       .hero {
         flex-direction: column;
@@ -297,6 +411,18 @@
         width: 100%;
       }
 
+      .edit-row {
+        flex-wrap: wrap;
+      }
+
+      .edit-row .btn {
+        width: auto;
+      }
+
+      table {
+        min-width: 760px;
+      }
+
       .status-pill {
         align-self: flex-start;
       }
@@ -304,94 +430,125 @@
   </style>
 </head>
 <body>
-  <div id="app" class="container">
+  <div id="app" class="container surface">
     <header class="hero">
       <div>
-        <h1 class="title">会话存档群聊绑定管理</h1>
-        <div class="subtitle">管理 roomid 与群聊名称的绑定关系，支持增删改查与关键字过滤。</div>
+        <h1 class="title">会话存档模块管理</h1>
+        <div class="subtitle">以本地 JSON 文件为模块展示群聊记录，映射关系来自后端绑定表，点击即可查看群聊内容。</div>
       </div>
-      <div class="status-pill">共 {{ totalCount }} 条绑定</div>
+      <div class="status-pill">共 {{ totalCount }} 个模块</div>
     </header>
 
     <section class="card">
-      <div class="grid">
+      <div class="grid" style="grid-template-columns: 1fr auto auto;">
         <div class="field">
-          <label for="roomid">roomid</label>
-          <input id="roomid" v-model.trim="createForm.roomid" placeholder="例如: wrXxx123" />
-        </div>
-        <div class="field">
-          <label for="room-name">群聊名称</label>
-          <input id="room-name" v-model.trim="createForm.room_name" placeholder="例如: 运营讨论群" />
+          <label for="keyword">模块筛选</label>
+          <input id="keyword" v-model.trim="keywordInput" placeholder="按 JSON 文件名或 roomid 筛选" @keyup.enter="applyFilter" />
         </div>
         <div class="toolbar">
-          <button class="btn primary" :disabled="loading.create" @click="createBinding">
-            {{ loading.create ? "保存中..." : "新增绑定" }}
-          </button>
+          <button class="btn neutral" :disabled="loading.modules" @click="applyFilter">查询</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn neutral" :disabled="loading.modules" @click="refreshModules">刷新</button>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <div class="grid" style="grid-template-columns: 1fr auto auto;">
-        <div class="field">
-          <label for="keyword">关键字</label>
-          <input id="keyword" v-model.trim="keywordInput" placeholder="按 roomid 或群聊名称筛选" @keyup.enter="applyFilter" />
-        </div>
-        <div class="toolbar">
-          <button class="btn neutral" :disabled="loading.list" @click="applyFilter">查询</button>
-        </div>
-        <div class="toolbar">
-          <button class="btn neutral" :disabled="loading.list" @click="refreshList">刷新</button>
-        </div>
-      </div>
-
       <div class="count">当前筛选: {{ keyword || "全部" }}</div>
+      <div class="meta-row">
+        <span>已绑定: {{ boundCount }}</span>
+        <span>未绑定: {{ unboundCount }}</span>
+      </div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th style="width: 26%;">roomid</th>
-              <th style="width: 24%;">群聊名称</th>
-              <th style="width: 18%;">创建时间</th>
-              <th style="width: 18%;">更新时间</th>
-              <th style="width: 14%;">操作</th>
+              <th style="width: 20%;">JSON 文件</th>
+              <th style="width: 18%;">roomid</th>
+              <th style="width: 24%;">绑定群聊名称</th>
+              <th style="width: 10%;">消息数</th>
+              <th style="width: 12%;">文件时间</th>
+              <th style="width: 16%;">操作</th>
             </tr>
           </thead>
-          <tbody v-if="items.length > 0">
-            <tr v-for="item in items" :key="item.roomid">
+          <tbody v-if="modules.length > 0">
+            <tr v-for="item in modules" :key="item.filename" :class="{ 'selected-row': selectedModule && selectedModule.filename === item.filename }">
+              <td>
+                <div class="filename">{{ item.filename }}</div>
+                <div class="muted" v-if="item.parse_error">解析异常</div>
+              </td>
               <td>
                 <div class="roomid">{{ item.roomid }}</div>
               </td>
               <td>
-                <div v-if="editingRoomid !== item.roomid">{{ item.room_name }}</div>
-                <div v-else class="edit-row">
-                  <input v-model.trim="editingRoomName" maxlength="128" />
-                  <button class="btn primary" :disabled="loading.update" @click="saveEdit(item)">
-                    {{ loading.update ? "保存中" : "保存" }}
+                <div>
+                  <span class="chip" :class="item.room_name ? 'bound' : 'unbound'">
+                    {{ item.room_name ? '已绑定' : '未绑定' }}
+                  </span>
+                </div>
+                <div class="edit-row">
+                  <input
+                    :value="editRoomNames[item.roomid] || ''"
+                    @input="onEditRoomName(item.roomid, $event.target.value)"
+                    maxlength="128"
+                    placeholder="输入群聊名称后保存"
+                  />
+                  <button class="btn ok small" :disabled="loading.bindingRoomid === item.roomid" @click="saveBinding(item)">
+                    {{ loading.bindingRoomid === item.roomid ? '保存中' : '保存映射' }}
                   </button>
-                  <button class="btn neutral" :disabled="loading.update" @click="cancelEdit">取消</button>
+                  <button class="btn danger small" :disabled="loading.bindingRoomid === item.roomid || !item.room_name" @click="deleteBinding(item)">
+                    删除映射
+                  </button>
                 </div>
               </td>
-              <td class="muted">{{ formatTime(item.created_at) }}</td>
-              <td class="muted">{{ formatTime(item.updated_at) }}</td>
+              <td class="muted">{{ item.message_count }}</td>
+              <td class="muted">{{ formatUnixTime(item.file_mtime) }}</td>
               <td>
-                <div class="inline-actions" v-if="editingRoomid !== item.roomid">
-                  <button class="btn neutral" @click="startEdit(item)">编辑</button>
-                  <button class="btn danger" :disabled="loading.delete" @click="deleteBinding(item)">
-                    {{ loading.delete && deletingRoomid === item.roomid ? "删除中" : "删除" }}
+                <div class="inline-actions">
+                  <button class="btn neutral small" :disabled="loading.messages" @click="viewModuleMessages(item)">
+                    {{ loading.messages && selectedModule && selectedModule.filename === item.filename ? '加载中' : '查看内容' }}
                   </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
-        <div v-if="items.length === 0" class="empty">
-          {{ loading.list ? "正在加载数据..." : "暂无数据，可先新增一条绑定" }}
+        <div v-if="modules.length === 0" class="empty">
+          {{ loading.modules ? "正在加载模块..." : "暂无 JSON 模块数据" }}
         </div>
       </div>
 
       <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
+    </section>
+
+    <section class="card" v-if="selectedModule">
+      <div class="viewer-head">
+        <div>
+          <h2 class="viewer-title">群聊内容查看</h2>
+          <div class="muted">文件: {{ selectedModule.filename }} | roomid: {{ selectedModule.roomid }}</div>
+        </div>
+        <div class="status-pill">共 {{ selectedCount }} 条消息</div>
+      </div>
+
+      <div class="meta-row">
+        <span>绑定名称: {{ selectedModule.room_name || "未绑定" }}</span>
+        <span>最近消息时间: {{ formatUnixTime(selectedLatestMsgtime) }}</span>
+      </div>
+
+      <div class="message-list" v-if="selectedMessages.length > 0">
+        <div class="message-item" v-for="(msg, idx) in selectedMessages" :key="idx">
+          <div class="message-top">
+            <span>#{{ idx + 1 }}</span>
+            <span>msgtime: {{ formatUnixTime(msg.msgtime) }}</span>
+          </div>
+          <pre class="message-json">{{ toPrettyJson(msg) }}</pre>
+        </div>
+      </div>
+      <div class="empty" v-else>
+        {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无消息" }}
+      </div>
     </section>
   </div>
 
@@ -402,22 +559,21 @@
       data() {
         return {
           apiBase: "/chat/archive",
-          items: [],
+          modules: [],
           totalCount: 0,
+          boundCount: 0,
+          unboundCount: 0,
           keyword: "",
           keywordInput: "",
-          editingRoomid: "",
-          editingRoomName: "",
-          deletingRoomid: "",
-          createForm: {
-            roomid: "",
-            room_name: "",
-          },
+          editRoomNames: {},
+          selectedModule: null,
+          selectedMessages: [],
+          selectedCount: 0,
+          selectedLatestMsgtime: null,
           loading: {
-            list: false,
-            create: false,
-            update: false,
-            delete: false,
+            modules: false,
+            messages: false,
+            bindingRoomid: "",
           },
           message: {
             text: "",
@@ -426,7 +582,7 @@
         };
       },
       mounted() {
-        this.refreshList();
+        this.refreshModules();
       },
       methods: {
         setMessage(text, type = "ok") {
@@ -437,15 +593,32 @@
           this.message.text = "";
           this.message.type = "ok";
         },
-        formatTime(value) {
+        formatUnixTime(value) {
+          if (!value || Number(value) <= 0) {
+            return "-";
+          }
+          const date = new Date(Number(value) * 1000);
+          if (Number.isNaN(date.getTime())) {
+            return String(value);
+          }
+          return date.toLocaleString("zh-CN", { hour12: false });
+        },
+        formatIsoTime(value) {
           if (!value) {
             return "-";
           }
           const date = new Date(value);
           if (Number.isNaN(date.getTime())) {
-            return value;
+            return String(value);
           }
           return date.toLocaleString("zh-CN", { hour12: false });
+        },
+        toPrettyJson(obj) {
+          try {
+            return JSON.stringify(obj, null, 2);
+          } catch (err) {
+            return String(obj);
+          }
         },
         async request(url, options = {}) {
           const resp = await fetch(url, {
@@ -463,111 +636,139 @@
           }
           return data;
         },
-        async refreshList() {
-          this.loading.list = true;
+        buildCounts() {
+          const bound = this.modules.filter((item) => !!item.room_name).length;
+          this.boundCount = bound;
+          this.unboundCount = this.modules.length - bound;
+        },
+        syncEditRoomNames() {
+          const nextMap = {};
+          this.modules.forEach((item) => {
+            nextMap[item.roomid] = item.room_name || "";
+          });
+          this.editRoomNames = nextMap;
+        },
+        async refreshModules() {
+          this.loading.modules = true;
           this.clearMessage();
           try {
             const query = this.keyword ? `?keyword=${encodeURIComponent(this.keyword)}` : "";
-            const data = await this.request(`${this.apiBase}/room-bindings${query}`, {
+            const data = await this.request(`${this.apiBase}/group-modules${query}`, {
               method: "GET",
             });
-            this.items = data.items || [];
+            this.modules = data.items || [];
             this.totalCount = data.count || 0;
+            this.buildCounts();
+            this.syncEditRoomNames();
+
+            if (this.selectedModule) {
+              const found = this.modules.find((item) => item.filename === this.selectedModule.filename);
+              if (found) {
+                this.selectedModule = found;
+              }
+            }
           } catch (err) {
             this.setMessage(String(err.message || err), "error");
-            this.items = [];
+            this.modules = [];
             this.totalCount = 0;
+            this.boundCount = 0;
+            this.unboundCount = 0;
           } finally {
-            this.loading.list = false;
+            this.loading.modules = false;
           }
         },
         async applyFilter() {
           this.keyword = this.keywordInput.trim();
-          await this.refreshList();
+          await this.refreshModules();
         },
-        async createBinding() {
-          const roomid = this.createForm.roomid.trim();
-          const roomName = this.createForm.room_name.trim();
-          if (!roomid || !roomName) {
-            this.setMessage("roomid 与群聊名称都不能为空", "warn");
-            return;
-          }
+        onEditRoomName(roomid, value) {
+          this.editRoomNames = {
+            ...this.editRoomNames,
+            [roomid]: value,
+          };
+        },
 
-          this.loading.create = true;
-          this.clearMessage();
-          try {
-            await this.request(`${this.apiBase}/room-binding`, {
-              method: "POST",
-              body: JSON.stringify({
-                roomid,
-                room_name: roomName,
-              }),
-            });
-            this.createForm.roomid = "";
-            this.createForm.room_name = "";
-            this.setMessage("新增成功", "ok");
-            await this.refreshList();
-          } catch (err) {
-            this.setMessage(String(err.message || err), "error");
-          } finally {
-            this.loading.create = false;
-          }
-        },
-        startEdit(item) {
-          this.editingRoomid = item.roomid;
-          this.editingRoomName = item.room_name || "";
-          this.clearMessage();
-        },
-        cancelEdit() {
-          this.editingRoomid = "";
-          this.editingRoomName = "";
-        },
-        async saveEdit(item) {
-          const roomName = this.editingRoomName.trim();
+        async saveBinding(item) {
+          const roomName = (this.editRoomNames[item.roomid] || "").trim();
           if (!roomName) {
             this.setMessage("群聊名称不能为空", "warn");
             return;
           }
 
-          this.loading.update = true;
+          this.loading.bindingRoomid = item.roomid;
           this.clearMessage();
           try {
-            await this.request(`${this.apiBase}/room-binding/${encodeURIComponent(item.roomid)}`, {
-              method: "PUT",
-              body: JSON.stringify({ room_name: roomName }),
-            });
-            this.setMessage("更新成功", "ok");
-            this.cancelEdit();
-            await this.refreshList();
+            if (item.room_name) {
+              await this.request(`${this.apiBase}/room-binding/${encodeURIComponent(item.roomid)}`, {
+                method: "PUT",
+                body: JSON.stringify({ room_name: roomName }),
+              });
+              this.setMessage(`映射已更新: ${item.roomid}`, "ok");
+            } else {
+              await this.request(`${this.apiBase}/room-binding`, {
+                method: "POST",
+                body: JSON.stringify({ roomid: item.roomid, room_name: roomName }),
+              });
+              this.setMessage(`映射已创建: ${item.roomid}`, "ok");
+            }
+            await this.refreshModules();
           } catch (err) {
             this.setMessage(String(err.message || err), "error");
           } finally {
-            this.loading.update = false;
+            this.loading.bindingRoomid = "";
           }
         },
+
         async deleteBinding(item) {
-          const ok = window.confirm(`确定删除绑定?\nroomid: ${item.roomid}`);
+          if (!item.room_name) {
+            this.setMessage("当前模块没有绑定映射可删除", "warn");
+            return;
+          }
+
+          const ok = window.confirm(`确定删除映射?\nroomid: ${item.roomid}`);
           if (!ok) {
             return;
           }
 
-          this.loading.delete = true;
-          this.deletingRoomid = item.roomid;
+          this.loading.bindingRoomid = item.roomid;
           this.clearMessage();
           try {
             await this.request(`${this.apiBase}/room-binding/${encodeURIComponent(item.roomid)}`, {
               method: "DELETE",
             });
-            this.setMessage("删除成功", "ok");
-            if (this.editingRoomid === item.roomid) {
-              this.cancelEdit();
-            }
-            await this.refreshList();
+            this.setMessage(`映射已删除: ${item.roomid}`, "ok");
+            await this.refreshModules();
           } catch (err) {
             this.setMessage(String(err.message || err), "error");
           } finally {
-            this.loading.delete = false;
-            this.deletingRoomid = "";
+            this.loading.bindingRoomid = "";
+          }
+        },
+
+        async viewModuleMessages(item) {
+          this.selectedModule = item;
+          this.loading.messages = true;
+          this.clearMessage();
+          try {
+            const data = await this.request(`${this.apiBase}/group-module/${encodeURIComponent(item.filename)}`, {
+              method: "GET",
+            });
+            this.selectedMessages = data.messages || [];
+            this.selectedCount = data.count || 0;
+            this.selectedLatestMsgtime = data.latest_msgtime || item.latest_msgtime || null;
+
+            this.selectedModule = {
+              ...item,
+              roomid: data.roomid || item.roomid,
+              room_name: data.room_name || item.room_name || null,
+            };
+          } catch (err) {
+            this.setMessage(String(err.message || err), "error");
+            this.selectedMessages = [];
+            this.selectedCount = 0;
+            this.selectedLatestMsgtime = null;
+          } finally {
+            this.loading.messages = false;
           }
         },
       },

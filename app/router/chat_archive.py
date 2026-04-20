@@ -89,6 +89,54 @@ async def chat_archive():
         return _err(-1, str(e), saved_count=0)
 
 
+@router.get("/archive/group-modules")
+async def list_group_archive_modules(keyword: Optional[str] = Query(default=None)):
+    """按本地 JSON 文件列出群聊模块，并返回绑定关系。"""
+    try:
+        result = chat_archive_service.list_group_archive_modules(keyword=keyword)
+        items = result.get("items") or []
+
+        roomids = [
+            item.get("roomid")
+            for item in items
+            if isinstance(item, dict) and item.get("roomid")
+        ]
+        room_name_map = (
+            chat_archive_binding_service.get_room_name_map(roomids=roomids)
+            if roomids
+            else {}
+        )
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            roomid = item.get("roomid")
+            room_name = room_name_map.get(roomid) if roomid else None
+            item["room_name"] = room_name
+            item["is_bound"] = bool(room_name)
+
+        return _ok(result)
+    except Exception as e:
+        logger.exception("查询群聊存档模块失败")
+        return _err(-1, str(e), count=0, items=[])
+
+
+@router.get("/archive/group-module/{filename}")
+async def get_group_archive_module(filename: str):
+    """按 JSON 文件名读取群聊存档模块详情。"""
+    try:
+        result = chat_archive_service.get_group_archive_module(filename=filename)
+        roomid = str(result.get("roomid") or "").strip()
+        room_name = chat_archive_binding_service.get_room_name(roomid=roomid)
+        if room_name:
+            result["room_name"] = room_name
+        result["is_bound"] = bool(room_name)
+        return _ok(result)
+    except Exception as e:
+        logger.exception("查询群聊存档模块详情失败: filename=%s", filename)
+        return _err(-1, str(e), filename=filename, count=0, messages=[])
+
+
 @router.get("/archive/group/{roomid}")
 async def get_group_archive_messages(roomid: str):
     """查看指定群聊(roomid)的全部本地聊天记录。"""

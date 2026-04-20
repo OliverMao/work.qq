@@ -284,6 +284,138 @@ class ChatArchiveService:
             "messages": all_messages,
         }
 
+    @staticmethod
+    def _extract_roomid_from_filename(file_path: Path) -> str:
+        stem = file_path.stem.strip()
+        if "+" in stem:
+            # 兼容历史文件名: chat_name+roomid.json
+            tail = stem.rsplit("+", 1)[-1].strip()
+            if tail:
+                return tail
+        return stem
+
+    @staticmethod
+    def _extract_roomid_from_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+            roomid = str(item.get("roomid", "")).strip()
+            if roomid:
+                return roomid
+        return None
+
+    @staticmethod
+    def _extract_latest_msgtime(messages: List[Dict[str, Any]]) -> Optional[int]:
+        latest = 0
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+            try:
+                msgtime = int(item.get("msgtime", 0) or 0)
+            except Exception:
+                msgtime = 0
+            latest = max(latest, msgtime)
+        return latest or None
+
+    @staticmethod
+    def _normalize_module_filename(filename: str) -> str:
+        value = Path(str(filename or "").strip()).name
+        if not value:
+            raise ValueError("filename 不能为空")
+        if not value.lower().endswith(".json"):
+            raise ValueError("filename 必须是 .json 文件")
+        return value
+
+    def get_group_archive_module(self, filename: str) -> Dict[str, Any]:
+        """按 JSON 文件名读取单个群聊存档模块详情。"""
+        save_dir = Path(settings.chat_archive_save_dir)
+        if not save_dir.exists():
+            raise FileNotFoundError(f"存档目录不存在: {save_dir}")
+
+        normalized_filename = self._normalize_module_filename(filename)
+        file_path = save_dir / normalized_filename
+        if not file_path.exists() or not file_path.is_file():
+            raise FileNotFoundError(f"未找到存档模块文件: {normalized_filename}")
+
+        messages = self._load_messages_from_file(file_path)
+        messages.sort(key=lambda item: int(item.get("msgtime", 0) or 0))
+
+        roomid = (
+            self._extract_roomid_from_messages(messages)
+            or self._extract_roomid_from_filename(file_path)
+        )
+        stat = file_path.stat()
+
+        return {
+            "filename": normalized_filename,
+            "roomid": roomid,
+            "save_path": str(file_path),
+            "count": len(messages),
+            "latest_msgtime": self._extract_latest_msgtime(messages),
+            "file_mtime": int(stat.st_mtime),
+            "messages": messages,
+        }
+
+    def list_group_archive_modules(self, keyword: Optional[str] = None) -> Dict[str, Any]:
+        """按 JSON 文件列出群聊存档模块，供前端管理界面展示。"""
+        save_dir = Path(settings.chat_archive_save_dir)
+        if not save_dir.exists():
+            return {
+                "count": 0,
+                "items": [],
+            }
+
+        keyword_value = str(keyword or "").strip().lower()
+        modules: List[Dict[str, Any]] = []
+
+        file_paths = sorted(
+            [path for path in save_dir.glob("*.json") if path.is_file()],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+
+        for file_path in file_paths:
+            parse_error: Optional[str] = None
+            messages: List[Dict[str, Any]] = []
+
+            try:
+                messages = self._load_messages_from_file(file_path)
+            except Exception as e:
+                parse_error = str(e)
+                logger.warning("读取存档文件失败: %s, error=%s", file_path, e)
+
+            roomid = (
+                self._extract_roomid_from_messages(messages)
+                or self._extract_roomid_from_filename(file_path)
+            )
+
+            filename = file_path.name
+            if keyword_value:
+                matched = (
+                    keyword_value in filename.lower()
+                    or keyword_value in roomid.lower()
+                )
+                if not matched:
+                    continue
+
+            stat = file_path.stat()
+            modules.append(
+                {
+                    "filename": filename,
+                    "roomid": roomid,
+                    "save_path": str(file_path),
+                    "message_count": len(messages),
+                    "latest_msgtime": self._extract_latest_msgtime(messages),
+                    "file_mtime": int(stat.st_mtime),
+                    "parse_error": parse_error,
+                }
+            )
+
+        return {
+            "count": len(modules),
+            "items": modules,
+        }
+
 
 
     def archive_messages(
