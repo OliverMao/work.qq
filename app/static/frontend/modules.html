@@ -15,6 +15,7 @@
       </div>
       <div class="hero-right">
         <a class="nav-link" href="/index">返回首页</a>
+        <a class="nav-link" href="/index/users">用户绑定管理</a>
         <div class="pill">模块数: {{ totalCount }}</div>
       </div>
     </header>
@@ -97,78 +98,6 @@
       <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
     </section>
 
-    <section class="panel" id="user-binding-section">
-      <div class="meta-row" style="justify-content: space-between;">
-        <strong style="font-size: 16px; color: #1a434b;">userid 昵称绑定管理</strong>
-        <span class="muted">当前 {{ userBindings.length }} 条</span>
-      </div>
-
-      <div class="grid" style="margin-bottom: 12px; grid-template-columns: 1fr 1fr auto;">
-        <div class="field">
-          <label for="create-user-id">user_id</label>
-          <input id="create-user-id" v-model.trim="userForm.user_id" placeholder="from里的user id" />
-        </div>
-        <div class="field">
-          <label for="create-user-name">昵称</label>
-          <input id="create-user-name" ref="createUserNicknameInput" v-model.trim="userForm.nickname" placeholder="例如: 小王" />
-        </div>
-        <div class="toolbar" style="align-self: end;">
-          <button class="btn primary" :disabled="loading.userCreate" @click="createUserNickname">
-            {{ loading.userCreate ? "创建中..." : "新增绑定" }}
-          </button>
-        </div>
-      </div>
-
-      <div class="toolbar" style="margin-bottom: 10px;">
-        <div class="field" style="flex: 1; min-width: 220px;">
-          <label for="user-keyword">昵称绑定筛选</label>
-          <input id="user-keyword" v-model.trim="userKeywordInput" placeholder="按 user_id 或昵称过滤" @keyup.enter="applyUserFilter" />
-        </div>
-        <button class="btn neutral" :disabled="loading.users" @click="applyUserFilter">查询</button>
-        <button class="btn neutral" :disabled="loading.users" @click="refreshUserBindings">刷新</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 28%;">user_id</th>
-              <th style="width: 32%;">昵称</th>
-              <th style="width: 20%;">更新时间</th>
-              <th style="width: 20%;">操作</th>
-            </tr>
-          </thead>
-          <tbody v-if="userBindings.length > 0">
-            <tr v-for="item in userBindings" :key="item.user_id">
-              <td class="mono">{{ item.user_id }}</td>
-              <td>
-                <input
-                  class="input"
-                  :value="userEditMap[item.user_id] || ''"
-                  @input="onUserNicknameEdit(item.user_id, $event.target.value)"
-                  maxlength="128"
-                />
-              </td>
-              <td>{{ formatIsoTime(item.updated_at) }}</td>
-              <td>
-                <div class="toolbar">
-                  <button class="btn ok small" :disabled="loading.userUpdateId === item.user_id" @click="saveUserNickname(item)">
-                    {{ loading.userUpdateId === item.user_id ? "保存中" : "保存" }}
-                  </button>
-                  <button class="btn danger small" :disabled="loading.userDeleteId === item.user_id" @click="removeUserBinding(item)">
-                    {{ loading.userDeleteId === item.user_id ? "删除中" : "删除" }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="userBindings.length === 0" class="empty">
-          {{ loading.users ? "正在加载用户绑定..." : "暂无用户昵称绑定" }}
-        </div>
-      </div>
-    </section>
-
     <div class="modal-mask" v-if="showViewer" @click.self="closeViewer">
       <div class="modal-panel">
         <div class="modal-header">
@@ -207,8 +136,10 @@
                   <td>
                     <div>{{ msg.from_display }}</div>
                     <div class="muted" v-if="msg.from_display !== msg.from_user_id">{{ msg.from_user_id }}</div>
-                    <div class="toolbar" v-if="msg.from_display === msg.from_user_id" style="margin-top: 4px;">
-                      <button class="btn neutral small" @click="quickBindUser(msg.from_user_id)">绑定昵称</button>
+                    <div class="toolbar" style="margin-top: 4px;">
+                      <button class="btn neutral small" @click="openUserBindDialog(msg.from_user_id, msg.from_display)">
+                        {{ msg.from_display === msg.from_user_id ? "绑定昵称" : "修改昵称" }}
+                      </button>
                     </div>
                   </td>
                   <td>{{ msg.action }}</td>
@@ -221,6 +152,42 @@
           </div>
           <div class="empty" v-else>
             {{ loading.messages ? "正在加载群聊内容..." : "当前模块暂无 text 类型消息" }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-mask" v-if="userBindDialog.visible" @click.self="closeUserBindDialog">
+      <div class="modal-panel" style="max-width: 560px; width: 100%;">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title">绑定用户昵称</h2>
+            <div class="muted">绑定后，消息中的 from 将优先显示昵称。</div>
+          </div>
+          <button class="btn neutral small" :disabled="userBindDialog.saving" @click="closeUserBindDialog">关闭</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="field" style="margin-bottom: 10px;">
+            <label>user_id</label>
+            <input class="input" :value="userBindDialog.userId" readonly />
+          </div>
+
+          <div class="field">
+            <label>昵称</label>
+            <input
+              class="input"
+              v-model.trim="userBindDialog.nickname"
+              maxlength="128"
+              placeholder="请输入昵称"
+              @keyup.enter="saveUserBindDialog"
+            />
+          </div>
+
+          <div class="toolbar" style="margin-top: 12px; justify-content: flex-end;">
+            <button class="btn primary" :disabled="userBindDialog.saving" @click="saveUserBindDialog">
+              {{ userBindDialog.saving ? "保存中..." : "保存昵称" }}
+            </button>
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@
     <header class="hero">
       <div>
         <h1 class="title">会话存档前端项目</h1>
-        <div class="subtitle">Vue 双向绑定页面：首页负责拉取，会话模块管理和用户昵称绑定独立在模块页。</div>
+        <div class="subtitle">Vue 双向绑定页面：首页负责拉取，会话模块管理与用户昵称绑定拆分为独立页面。</div>
       </div>
       <div class="hero-right">
         <div class="tag">路径: /index</div>
@@ -28,6 +28,7 @@
               {{ loading.pull ? "拉取中..." : "拉取" }}
             </button>
             <a class="btn neutral" href="/index/modules">进入模块管理</a>
+            <a class="btn neutral" href="/index/users">用户绑定管理</a>
           </div>
           <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
         </article>

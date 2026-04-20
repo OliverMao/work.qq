@@ -32,3 +32,9 @@ async def frontend_index_page_with_slash():
 async def frontend_modules_page():
     """会话存档模块管理页。"""
     return _serve_html("frontend", "modules.html")
+
+
+@router.get("/index/users")
+async def frontend_users_page():
+    """用户昵称绑定管理页。"""
+    return _serve_html("frontend", "users.html")

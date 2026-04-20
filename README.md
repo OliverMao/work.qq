@@ -10,7 +10,8 @@
 - **会话内容存档** — 拉取聊天记录并保存到本地
   - POST `/chat/archive` — 拉取并保存会话内容
   - GET `/index` — Vue 前端首页（含“拉取”按钮）
-  - GET `/index/modules` — Vue 模块管理页（room 绑定 + user 昵称绑定 + text 查看）
+  - GET `/index/modules` — Vue 模块管理页（room 绑定 + text 查看）
+  - GET `/index/users` — Vue 用户昵称绑定管理页
   - GET `/chat/archive/room-binding/admin` — roomid 绑定管理界面（Vue）
   - `/chat/archive/room-binding*` — roomid 绑定增删改查 API
   - `/chat/archive/user-binding*` — user_id 昵称绑定增删改查 API
@@ -49,6 +50,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `/chat/archive` | POST | 拉取聊天记录并保存为 JSON |
 | `/index` | GET | Vue 前端首页，提供“拉取”按钮调用 `/chat/archive` |
 | `/index/modules` | GET | Vue 前端模块管理页 |
+| `/index/users` | GET | Vue 用户昵称绑定管理页 |
 | `/chat/archive/room-binding/admin` | GET | 打开 roomid 绑定管理界面（Vue） |
 
 ### 3. 绑定与模块管理

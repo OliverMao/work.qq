@@ -5,10 +5,8 @@ import {
   createRoomBinding as apiCreateRoomBinding,
   updateRoomBinding as apiUpdateRoomBinding,
   deleteRoomBinding as apiDeleteRoomBinding,
-  listUserBindings,
   createUserBinding as apiCreateUserBinding,
   updateUserBinding as apiUpdateUserBinding,
-  deleteUserBinding as apiDeleteUserBinding,
 } from "/static/frontend/api.js";
 
 createApp({
@@ -29,23 +27,17 @@ createApp({
       selectedRawCount: 0,
       selectedLatestMsgtime: null,
 
-      userKeyword: "",
-      userKeywordInput: "",
-      userForm: {
-        user_id: "",
+      userBindDialog: {
+        visible: false,
+        userId: "",
         nickname: "",
+        saving: false,
       },
-      userBindings: [],
-      userEditMap: {},
 
       loading: {
         modules: false,
         messages: false,
         roomBindingId: "",
-        users: false,
-        userCreate: false,
-        userUpdateId: "",
-        userDeleteId: "",
       },
       message: {
         text: "",
@@ -53,8 +45,8 @@ createApp({
       },
     };
   },
-  async mounted() {
-    await Promise.all([this.refreshModules(), this.refreshUserBindings()]);
+  mounted() {
+    this.refreshModules();
   },
   methods: {
     setMessage(text, type = "ok") {
@@ -218,6 +210,82 @@ createApp({
       this.showViewer = false;
     },
 
+    openUserBindDialog(userId, currentDisplay) {
+      const normalizedId = String(userId || "").trim();
+      if (!normalizedId) {
+        return;
+      }
+
+      const normalizedDisplay = String(currentDisplay || "").trim();
+      this.userBindDialog.userId = normalizedId;
+      this.userBindDialog.nickname = normalizedDisplay && normalizedDisplay !== normalizedId
+        ? normalizedDisplay
+        : "";
+      this.userBindDialog.visible = true;
+    },
+
+    closeUserBindDialog() {
+      if (this.userBindDialog.saving) {
+        return;
+      }
+      this.userBindDialog.visible = false;
+    },
+
+    _applyNicknameToSelectedMessages(userId, nickname) {
+      const normalizedId = String(userId || "").trim();
+      const normalizedNickname = String(nickname || "").trim();
+      if (!normalizedId || !normalizedNickname) {
+        return;
+      }
+
+      this.selectedMessages = this.selectedMessages.map((item) => {
+        if (item.from_user_id !== normalizedId) {
+          return item;
+        }
+        return {
+          ...item,
+          from_display: normalizedNickname,
+        };
+      });
+    },
+
+    async saveUserBindDialog() {
+      const userId = String(this.userBindDialog.userId || "").trim();
+      const nickname = String(this.userBindDialog.nickname || "").trim();
+
+      if (!userId) {
+        this.setMessage("user_id 不能为空", "warn");
+        return;
+      }
+      if (!nickname) {
+        this.setMessage("昵称不能为空", "warn");
+        return;
+      }
+
+      this.userBindDialog.saving = true;
+      this.clearMessage();
+      try {
+        try {
+          await apiCreateUserBinding(userId, nickname);
+        } catch (err) {
+          const errMsg = String(err.message || err);
+          if (errMsg.includes("已存在")) {
+            await apiUpdateUserBinding(userId, nickname);
+          } else {
+            throw err;
+          }
+        }
+
+        this._applyNicknameToSelectedMessages(userId, nickname);
+        this.userBindDialog.visible = false;
+        this.setMessage(`昵称绑定已保存: ${userId}`, "ok");
+      } catch (err) {
+        this.setMessage(String(err.message || err), "error");
+      } finally {
+        this.userBindDialog.saving = false;
+      }
+    },
+
     async openTextViewer(item) {
       this.selectedModule = item;
       this.showViewer = true;
@@ -243,133 +311,6 @@ createApp({
         this.setMessage(String(err.message || err), "error");
       } finally {
         this.loading.messages = false;
-      }
-    },
-
-    syncUserEditMap() {
-      const map = {};
-      this.userBindings.forEach((item) => {
-        map[item.user_id] = item.nickname || "";
-      });
-      this.userEditMap = map;
-    },
-    onUserNicknameEdit(userId, value) {
-      this.userEditMap = {
-        ...this.userEditMap,
-        [userId]: value,
-      };
-    },
-
-    quickBindUser(userId) {
-      const normalizedId = String(userId || "").trim();
-      if (!normalizedId) {
-        return;
-      }
-
-      this.userForm.user_id = normalizedId;
-      const existed = this.userBindings.find((item) => item.user_id === normalizedId);
-      this.userForm.nickname = existed ? String(existed.nickname || "") : "";
-
-      const section = document.getElementById("user-binding-section");
-      if (section) {
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-
-      this.$nextTick(() => {
-        const input = this.$refs.createUserNicknameInput;
-        if (input && typeof input.focus === "function") {
-          input.focus();
-        }
-      });
-    },
-
-    async refreshUserBindings() {
-      this.loading.users = true;
-      try {
-        const data = await listUserBindings(this.userKeyword);
-        this.userBindings = data.items || [];
-        this.syncUserEditMap();
-      } catch (err) {
-        this.userBindings = [];
-        this.userEditMap = {};
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.users = false;
-      }
-    },
-    async applyUserFilter() {
-      this.userKeyword = this.userKeywordInput.trim();
-      await this.refreshUserBindings();
-    },
-
-    async createUserNickname() {
-      const userId = this.userForm.user_id.trim();
-      const nickname = this.userForm.nickname.trim();
-      if (!userId || !nickname) {
-        this.setMessage("user_id 和 昵称 不能为空", "warn");
-        return;
-      }
-
-      this.loading.userCreate = true;
-      this.clearMessage();
-      try {
-        await apiCreateUserBinding(userId, nickname);
-        this.userForm.user_id = "";
-        this.userForm.nickname = "";
-        this.setMessage(`用户昵称绑定已创建: ${userId}`, "ok");
-        await this.refreshUserBindings();
-        await this.refreshModules();
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.userCreate = false;
-      }
-    },
-
-    async saveUserNickname(item) {
-      const nickname = (this.userEditMap[item.user_id] || "").trim();
-      if (!nickname) {
-        this.setMessage("昵称不能为空", "warn");
-        return;
-      }
-
-      this.loading.userUpdateId = item.user_id;
-      this.clearMessage();
-      try {
-        await apiUpdateUserBinding(item.user_id, nickname);
-        this.setMessage(`用户昵称绑定已更新: ${item.user_id}`, "ok");
-        await this.refreshUserBindings();
-
-        if (this.showViewer && this.selectedModule) {
-          await this.openTextViewer(this.selectedModule);
-        }
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.userUpdateId = "";
-      }
-    },
-
-    async removeUserBinding(item) {
-      const ok = window.confirm(`确定删除用户昵称绑定?\nuser_id: ${item.user_id}`);
-      if (!ok) {
-        return;
-      }
-
-      this.loading.userDeleteId = item.user_id;
-      this.clearMessage();
-      try {
-        await apiDeleteUserBinding(item.user_id);
-        this.setMessage(`用户昵称绑定已删除: ${item.user_id}`, "ok");
-        await this.refreshUserBindings();
-
-        if (this.showViewer && this.selectedModule) {
-          await this.openTextViewer(this.selectedModule);
-        }
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.userDeleteId = "";
       }
     },
   },
