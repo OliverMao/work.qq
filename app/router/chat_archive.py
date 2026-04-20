@@ -68,7 +68,7 @@ def _value_error_code(message: str, default_code: int = 400) -> int:
     return default_code
 
 
-def _is_wecom_user_id_queryable(user_id: str) -> bool:
+def _is_wecom_user_id(user_id: str) -> bool:
     value = str(user_id or "").strip().lower()
     return value.startswith("wo") or value.startswith("wm")
 
@@ -87,6 +87,22 @@ def _fetch_wecom_user_nickname(access_token: str, user_id: str) -> str:
     nickname = str(data.get("name") or data.get("alias") or "").strip()
     if not nickname:
         raise RuntimeError("user/get 未返回可用昵称")
+    return nickname
+
+def _fetch_externalcontact_user_nickname(access_token: str, user_id: str) -> str:
+    url = "https://qyapi.weixin.qq.com/cgi-bin/externalcontact/get"
+    resp = httpx.get(
+        url,
+        params={"access_token": access_token, "external_userid": user_id},
+        timeout=10,
+    )
+    data = resp.json()
+    if data.get("errcode") != 0:
+        raise RuntimeError(f"externalcontact/get 失败: {data}")
+
+    nickname = str(data.get("name") or data.get("alias") or "").strip()
+    if not nickname:
+        raise RuntimeError("externalcontact/get 未返回可用昵称")
     return nickname
 
 
@@ -359,7 +375,7 @@ async def list_archive_user_candidates(keyword: Optional[str] = Query(default=No
             item["nickname"] = nickname
             item["display_name"] = nickname or user_id
             item["is_bound"] = bool(nickname)
-            item["can_auto_query"] = _is_wecom_user_id_queryable(user_id)
+            item["can_auto_query"] = True
 
         return _ok(result)
     except Exception as e:
@@ -390,9 +406,6 @@ async def auto_query_and_bind_users(payload: AutoBindUsersRequest):
         skipped_already_bound = 0
 
         for user_id in all_user_ids:
-            if not _is_wecom_user_id_queryable(user_id):
-                skipped_not_queryable += 1
-                continue
             if payload.only_unbound and nickname_map.get(user_id):
                 skipped_already_bound += 1
                 continue
@@ -441,7 +454,10 @@ async def auto_query_and_bind_users(payload: AutoBindUsersRequest):
         for user_id in target_user_ids:
             queried_count += 1
             try:
-                nickname = _fetch_wecom_user_nickname(access_token=access_token, user_id=user_id)
+                if _is_wecom_user_id(user_id):
+                    nickname = _fetch_wecom_user_nickname(access_token=access_token, user_id=user_id)
+                else:
+                    nickname = _fetch_externalcontact_user_nickname(access_token=access_token, user_id=user_id)
                 bind_result = chat_archive_user_binding_service.upsert_binding(
                     user_id=user_id,
                     nickname=nickname,
