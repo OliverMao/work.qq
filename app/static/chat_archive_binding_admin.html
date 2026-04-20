@@ -369,38 +369,48 @@
       background: #fff;
     }
 
-    .message-item {
-      padding: 10px 12px;
+    .message-table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+    }
+
+    .message-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7efe2;
+      border-bottom: 1px solid #e6d7c2;
+      color: #34474d;
+      font-size: 12px;
+      letter-spacing: .2px;
+      text-align: left;
+      padding: 10px;
+      white-space: nowrap;
+    }
+
+    .message-table tbody td {
       border-bottom: 1px solid #efe4d4;
-    }
-
-    .message-item:last-child {
-      border-bottom: 0;
-    }
-
-    .message-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 6px;
-      color: #55666c;
       font-size: 12px;
-    }
-
-    .message-json {
-      margin: 0;
-      font-family: "JetBrains Mono", "Consolas", monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #243b43;
-      background: #f9f4eb;
-      border: 1px solid #e8dccb;
-      border-radius: 8px;
-      padding: 8px;
-      white-space: pre-wrap;
+      color: #2f444b;
+      padding: 10px;
+      vertical-align: top;
       word-break: break-all;
+    }
+
+    .message-table tbody tr:hover {
+      background: #fff8ef;
+    }
+
+    .message-cell-mono {
+      font-family: "JetBrains Mono", "Consolas", monospace;
+      color: #264c56;
+    }
+
+    .content-cell {
+      max-width: 320px;
+      white-space: pre-wrap;
+      line-height: 1.45;
     }
 
     .selected-row {
@@ -603,20 +613,38 @@
           <div class="meta-row">
             <span>绑定名称: {{ selectedModule ? (selectedModule.room_name || "未绑定") : "未绑定" }}</span>
             <span>最近消息时间: {{ formatUnixTime(selectedLatestMsgtime) }}</span>
-            <span>消息总数: {{ selectedCount }}</span>
+            <span>text消息数: {{ selectedCount }}</span>
+            <span>原始消息数: {{ selectedRawCount }}</span>
           </div>
 
           <div class="message-list" v-if="selectedMessages.length > 0">
-            <div class="message-item" v-for="(msg, idx) in selectedMessages" :key="idx">
-              <div class="message-top">
-                <span>#{{ idx + 1 }}</span>
-                <span>msgtime: {{ formatUnixTime(msg.msgtime) }}</span>
-              </div>
-              <pre class="message-json">{{ toPrettyJson(msg) }}</pre>
-            </div>
+            <table class="message-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>msgid</th>
+                  <th>from</th>
+                  <th>action</th>
+                  <th>roomid</th>
+                  <th>msgtype</th>
+                  <th>text:content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(msg, idx) in selectedMessages" :key="msg.msgid || idx">
+                  <td>{{ idx + 1 }}</td>
+                  <td class="message-cell-mono">{{ msg.msgid }}</td>
+                  <td class="message-cell-mono">{{ msg.from }}</td>
+                  <td>{{ msg.action }}</td>
+                  <td class="message-cell-mono">{{ msg.roomid }}</td>
+                  <td>{{ msg.msgtype }}</td>
+                  <td class="content-cell">{{ msg.text_content }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           <div class="empty" v-else>
-            {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无消息" }}
+            {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无 text 类型消息" }}
           </div>
         </div>
       </div>
@@ -641,6 +669,7 @@
           showViewer: false,
           selectedMessages: [],
           selectedCount: 0,
+          selectedRawCount: 0,
           selectedLatestMsgtime: null,
           loading: {
             modules: false,
@@ -669,28 +698,12 @@
           if (!value || Number(value) <= 0) {
             return "-";
           }
-          const date = new Date(Number(value) * 1000);
+          const ts = Number(value);
+          const date = new Date(ts >= 1000000000000 ? ts : ts * 1000);
           if (Number.isNaN(date.getTime())) {
             return String(value);
           }
           return date.toLocaleString("zh-CN", { hour12: false });
-        },
-        formatIsoTime(value) {
-          if (!value) {
-            return "-";
-          }
-          const date = new Date(value);
-          if (Number.isNaN(date.getTime())) {
-            return String(value);
-          }
-          return date.toLocaleString("zh-CN", { hour12: false });
-        },
-        toPrettyJson(obj) {
-          try {
-            return JSON.stringify(obj, null, 2);
-          } catch (err) {
-            return String(obj);
-          }
         },
         async request(url, options = {}) {
           const resp = await fetch(url, {
@@ -764,6 +777,33 @@
           this.showViewer = false;
         },
 
+        normalizeTextContent(message) {
+          const textPayload = message && message.text;
+          const content = textPayload && textPayload.content;
+          if (content === null || content === undefined) {
+            return "";
+          }
+          return String(content);
+        },
+
+        toStructuredTextMessages(messages) {
+          if (!Array.isArray(messages)) {
+            return [];
+          }
+
+          return messages
+            .filter((msg) => String(msg && msg.msgtype || "").toLowerCase() === "text")
+            .map((msg) => ({
+              msgid: String(msg.msgid || ""),
+              from: String(msg.from || ""),
+              action: String(msg.action || ""),
+              roomid: String(msg.roomid || ""),
+              msgtype: String(msg.msgtype || ""),
+              text_content: this.normalizeTextContent(msg),
+              msgtime: Number(msg.msgtime || 0),
+            }));
+        },
+
         async saveBinding(item) {
           const roomName = (this.editRoomNames[item.roomid] || "").trim();
           if (!roomName) {
@@ -830,8 +870,10 @@
             const data = await this.request(`${this.apiBase}/group-module/${encodeURIComponent(item.filename)}`, {
               method: "GET",
             });
-            this.selectedMessages = data.messages || [];
-            this.selectedCount = data.count || 0;
+            const rawMessages = data.messages || [];
+            this.selectedMessages = this.toStructuredTextMessages(rawMessages);
+            this.selectedCount = this.selectedMessages.length;
+            this.selectedRawCount = Number(data.count || rawMessages.length || 0);
             this.selectedLatestMsgtime = data.latest_msgtime || item.latest_msgtime || null;
 
             this.selectedModule = {
@@ -843,6 +885,7 @@
             this.setMessage(String(err.message || err), "error");
             this.selectedMessages = [];
             this.selectedCount = 0;
+            this.selectedRawCount = 0;
             this.selectedLatestMsgtime = null;
           } finally {
             this.loading.messages = false;
