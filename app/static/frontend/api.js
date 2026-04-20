@@ -92,6 +92,20 @@ export function listUserBindings(keyword) {
   });
 }
 
+export function listArchiveUserCandidates(keyword) {
+  return apiRequest("/chat/archive/user-candidates", {
+    method: "GET",
+    query: { keyword },
+  });
+}
+
+export function autoBindUserNicknames(payload = {}) {
+  return apiRequest("/chat/archive/user-bindings/auto-bind", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export function createUserBinding(userId, nickname) {
   return apiRequest("/chat/archive/user-binding", {
     method: "POST",

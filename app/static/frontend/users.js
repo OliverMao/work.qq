@@ -1,6 +1,8 @@
 import { createApp } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import {
   listUserBindings,
+  listArchiveUserCandidates,
+  autoBindUserNicknames,
   createUserBinding,
   updateUserBinding,
   deleteUserBinding,
@@ -11,14 +13,28 @@ createApp({
     return {
       keyword: "",
       keywordInput: "",
+      candidateKeyword: "",
+      candidateKeywordInput: "",
+      candidateStats: {
+        files_scanned: 0,
+        messages_scanned: 0,
+      },
+      autoBindForm: {
+        only_unbound: true,
+        limit: 1000,
+      },
+      autoBindResult: null,
       userForm: {
         user_id: "",
         nickname: "",
       },
       userBindings: [],
+      userCandidates: [],
       userEditMap: {},
       loading: {
         list: false,
+        candidates: false,
+        autoBind: false,
         create: false,
         updateId: "",
         deleteId: "",
@@ -29,8 +45,17 @@ createApp({
       },
     };
   },
+  computed: {
+    autoQueryableCount() {
+      return this.userCandidates.filter((item) => item.can_auto_query).length;
+    },
+    boundCandidateCount() {
+      return this.userCandidates.filter((item) => item.is_bound).length;
+    },
+  },
   mounted() {
     this.refreshUserBindings();
+    this.refreshUserCandidates();
   },
   methods: {
     setMessage(text, type = "ok") {
@@ -63,6 +88,91 @@ createApp({
         ...this.userEditMap,
         [userId]: value,
       };
+    },
+    normalizeLimit(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 1) {
+        return 1000;
+      }
+      if (n > 10000) {
+        return 10000;
+      }
+      return Math.floor(n);
+    },
+    formatAction(action) {
+      if (action === "created") {
+        return "新增";
+      }
+      if (action === "updated") {
+        return "更新";
+      }
+      if (action === "unchanged") {
+        return "不变";
+      }
+      return action || "-";
+    },
+    async refreshUserCandidates() {
+      this.loading.candidates = true;
+      try {
+        const data = await listArchiveUserCandidates(this.candidateKeyword);
+        this.userCandidates = data.items || [];
+        this.candidateStats = {
+          files_scanned: data.files_scanned || 0,
+          messages_scanned: data.messages_scanned || 0,
+        };
+      } catch (err) {
+        this.userCandidates = [];
+        this.candidateStats = {
+          files_scanned: 0,
+          messages_scanned: 0,
+        };
+        this.setMessage(String(err.message || err), "error");
+      } finally {
+        this.loading.candidates = false;
+      }
+    },
+    async applyCandidateFilter() {
+      this.candidateKeyword = this.candidateKeywordInput.trim();
+      await this.refreshUserCandidates();
+    },
+    async runAutoBind() {
+      if (this.loading.autoBind) {
+        return;
+      }
+
+      const limit = this.normalizeLimit(this.autoBindForm.limit);
+      this.autoBindForm.limit = limit;
+
+      const ok = window.confirm(
+        `将自动查询并绑定昵称。\n仅绑定未绑定: ${this.autoBindForm.only_unbound ? "是" : "否"}\n最大处理数量: ${limit}`,
+      );
+      if (!ok) {
+        return;
+      }
+
+      this.loading.autoBind = true;
+      this.clearMessage();
+      try {
+        const data = await autoBindUserNicknames({
+          keyword: this.candidateKeyword || null,
+          only_unbound: this.autoBindForm.only_unbound,
+          limit,
+        });
+        this.autoBindResult = data;
+
+        const summary = [
+          `处理 ${data.selected_user_ids || 0} 个`,
+          `成功 ${data.success_count || 0} 个`,
+          `失败 ${data.failed_count || 0} 个`,
+        ].join("，");
+        this.setMessage(`一键查询并绑定完成：${summary}`, "ok");
+
+        await Promise.all([this.refreshUserBindings(), this.refreshUserCandidates()]);
+      } catch (err) {
+        this.setMessage(String(err.message || err), "error");
+      } finally {
+        this.loading.autoBind = false;
+      }
     },
 
     async refreshUserBindings() {

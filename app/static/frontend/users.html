@@ -11,16 +11,127 @@
     <header class="hero">
       <div>
         <h1 class="title">用户昵称绑定管理</h1>
-        <div class="subtitle">维护 from 里的 user_id 与昵称映射关系，消息展示将优先显示昵称。</div>
+        <div class="subtitle">读取会话存档中的去重 user_id，可一键查询企业微信昵称并落库绑定，消息展示优先显示昵称。</div>
       </div>
       <div class="hero-right">
         <a class="nav-link" href="/index">返回首页</a>
         <a class="nav-link" href="/index/modules">返回模块页</a>
+        <div class="pill">候选数: {{ userCandidates.length }}</div>
         <div class="pill">绑定数: {{ userBindings.length }}</div>
       </div>
     </header>
 
     <section class="panel">
+      <h3 class="card-title">一键查询并绑定</h3>
+      <p class="card-desc" style="margin-bottom: 12px;">系统会扫描全部聊天文件提取去重 user_id，仅对前缀为 wo / wm 的 user_id 进行企业微信查询（使用 app_secret）。</p>
+
+      <div class="toolbar" style="margin-bottom: 10px;">
+        <div class="field" style="flex: 1; min-width: 240px;">
+          <label for="candidate-keyword">候选池筛选</label>
+          <input
+            id="candidate-keyword"
+            v-model.trim="candidateKeywordInput"
+            placeholder="按 user_id 过滤候选池"
+            @keyup.enter="applyCandidateFilter"
+          />
+        </div>
+        <button class="btn neutral" :disabled="loading.candidates" @click="applyCandidateFilter">
+          {{ loading.candidates ? "读取中..." : "读取/筛选候选池" }}
+        </button>
+        <button class="btn neutral" :disabled="loading.candidates" @click="refreshUserCandidates">刷新候选池</button>
+      </div>
+
+      <div class="toolbar" style="margin-bottom: 10px;">
+        <label class="field" style="flex-direction: row; align-items: center; gap: 8px; min-width: auto;">
+          <input type="checkbox" v-model="autoBindForm.only_unbound" />
+          <span>仅处理未绑定用户</span>
+        </label>
+        <div class="field" style="width: 150px;">
+          <label for="auto-bind-limit">最大处理数量</label>
+          <input id="auto-bind-limit" type="number" min="1" max="10000" v-model.number="autoBindForm.limit" />
+        </div>
+        <button class="btn primary" :disabled="loading.autoBind || loading.candidates" @click="runAutoBind">
+          {{ loading.autoBind ? "绑定中..." : "一键查询并绑定" }}
+        </button>
+      </div>
+
+      <div class="meta-row">
+        <div>扫描文件: {{ candidateStats.files_scanned }}</div>
+        <div>扫描消息: {{ candidateStats.messages_scanned }}</div>
+        <div>可自动查询: {{ autoQueryableCount }}</div>
+        <div>已绑定: {{ boundCandidateCount }}</div>
+      </div>
+
+      <div v-if="autoBindResult" class="message ok" style="margin-bottom: 10px;">
+        完成：选中 {{ autoBindResult.selected_user_ids || 0 }}，成功 {{ autoBindResult.success_count || 0 }}，失败 {{ autoBindResult.failed_count || 0 }}。
+        新增 {{ autoBindResult.created_count || 0 }}，更新 {{ autoBindResult.updated_count || 0 }}，不变 {{ autoBindResult.unchanged_count || 0 }}。
+        <span v-if="autoBindResult.truncated">（已按上限截断）</span>
+      </div>
+
+      <div
+        v-if="autoBindResult && (autoBindResult.failed_items || []).length > 0"
+        class="table-wrap"
+        style="margin-bottom: 12px;"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 26%;">失败 user_id</th>
+              <th style="width: 74%;">失败原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in autoBindResult.failed_items" :key="item.user_id">
+              <td class="mono">{{ item.user_id }}</td>
+              <td>{{ item.error || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" style="margin-bottom: 12px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 28%;">user_id</th>
+              <th style="width: 16%;">当前显示名</th>
+              <th style="width: 10%;">总次数</th>
+              <th style="width: 10%;">from</th>
+              <th style="width: 10%;">tolist</th>
+              <th style="width: 14%;">绑定状态</th>
+              <th style="width: 12%;">自动查询</th>
+            </tr>
+          </thead>
+          <tbody v-if="userCandidates.length > 0">
+            <tr v-for="item in userCandidates" :key="item.user_id">
+              <td class="mono">{{ item.user_id }}</td>
+              <td>{{ item.display_name || item.user_id }}</td>
+              <td>{{ item.hit_count || 0 }}</td>
+              <td>{{ item.from_count || 0 }}</td>
+              <td>{{ item.tolist_count || 0 }}</td>
+              <td>
+                <span class="chip" :class="item.is_bound ? 'bound' : 'unbound'">
+                  {{ item.is_bound ? "已绑定" : "未绑定" }}
+                </span>
+              </td>
+              <td>
+                <span class="chip" :class="item.can_auto_query ? 'bound' : 'unbound'">
+                  {{ item.can_auto_query ? "可查询" : "不可查询" }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="userCandidates.length === 0" class="empty">
+          {{ loading.candidates ? "正在扫描聊天文件..." : "暂无候选 user_id" }}
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3 class="card-title">手动维护绑定</h3>
+      <p class="card-desc" style="margin-bottom: 12px;">可以手动新增、编辑、删除 user_id 与昵称映射。</p>
+
       <div class="grid" style="margin-bottom: 12px; grid-template-columns: 1fr 1fr auto;">
         <div class="field">
           <label for="create-user-id">user_id</label>

@@ -146,6 +146,42 @@ class ChatArchiveUserBindingService:
         finally:
             db.close()
 
+    def upsert_binding(self, user_id: str, nickname: str) -> Dict[str, Any]:
+        """存在则更新，不存在则创建。"""
+        user_id_value = self._normalize_user_id(user_id)
+        nickname_value = self._normalize_nickname(nickname)
+
+        db = SessionLocal()
+        try:
+            record = (
+                db.query(ChatArchiveUserBinding)
+                .filter(ChatArchiveUserBinding.user_id == user_id_value)
+                .first()
+            )
+
+            action = "unchanged"
+            if not record:
+                record = ChatArchiveUserBinding(user_id=user_id_value, nickname=nickname_value)
+                db.add(record)
+                db.commit()
+                db.refresh(record)
+                action = "created"
+            elif record.nickname != nickname_value:
+                record.nickname = nickname_value
+                db.commit()
+                db.refresh(record)
+                action = "updated"
+
+            result = self._serialize(record)
+            result["action"] = action
+            return result
+        except SQLAlchemyError as db_err:
+            db.rollback()
+            logger.exception("upsert user_id 昵称绑定失败")
+            raise RuntimeError(f"upsert user_id 昵称绑定失败: {db_err}") from db_err
+        finally:
+            db.close()
+
     def delete_binding(self, user_id: str) -> Dict[str, Any]:
         user_id_value = self._normalize_user_id(user_id)
 

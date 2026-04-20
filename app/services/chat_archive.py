@@ -4,6 +4,7 @@
 
 import argparse
 import base64
+from collections import defaultdict
 import json
 import logging
 import os
@@ -475,6 +476,76 @@ class ChatArchiveService:
         return {
             "count": len(modules),
             "items": modules,
+        }
+
+    def list_archive_distinct_user_ids(self, keyword: Optional[str] = None) -> Dict[str, Any]:
+        """扫描全部聊天存档文件，提取去重后的 user_id 列表。"""
+        save_dir = Path(settings.chat_archive_save_dir)
+        if not save_dir.exists():
+            return {
+                "count": 0,
+                "files_scanned": 0,
+                "messages_scanned": 0,
+                "items": [],
+            }
+
+        keyword_value = str(keyword or "").strip().lower()
+        file_paths = sorted([path for path in save_dir.glob("*.json") if path.is_file()])
+
+        user_stats: Dict[str, Dict[str, Any]] = defaultdict(
+            lambda: {
+                "user_id": "",
+                "hit_count": 0,
+                "from_count": 0,
+                "tolist_count": 0,
+            }
+        )
+        messages_scanned = 0
+
+        for file_path in file_paths:
+            try:
+                messages = self._load_messages_from_file(file_path)
+            except Exception as e:
+                logger.warning("读取存档文件失败: %s, error=%s", file_path, e)
+                continue
+
+            messages_scanned += len(messages)
+            for message in messages:
+                if not isinstance(message, dict):
+                    continue
+
+                from_user = str(message.get("from") or "").strip()
+                if from_user:
+                    stat = user_stats[from_user]
+                    stat["user_id"] = from_user
+                    stat["hit_count"] += 1
+                    stat["from_count"] += 1
+
+                to_list = message.get("tolist")
+                if isinstance(to_list, list):
+                    for user in to_list:
+                        user_id = str(user or "").strip()
+                        if not user_id:
+                            continue
+                        stat = user_stats[user_id]
+                        stat["user_id"] = user_id
+                        stat["hit_count"] += 1
+                        stat["tolist_count"] += 1
+
+        items = list(user_stats.values())
+        if keyword_value:
+            items = [
+                item
+                for item in items
+                if keyword_value in str(item.get("user_id") or "").lower()
+            ]
+
+        items.sort(key=lambda item: (-int(item.get("hit_count", 0)), str(item.get("user_id") or "")))
+        return {
+            "count": len(items),
+            "files_scanned": len(file_paths),
+            "messages_scanned": messages_scanned,
+            "items": items,
         }
 
 
