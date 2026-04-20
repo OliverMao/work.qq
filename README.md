@@ -9,10 +9,11 @@
   - POST `/` — 接收消息/事件
 - **会话内容存档** — 拉取聊天记录并保存到本地
   - POST `/chat/archive` — 拉取并保存会话内容
-  - GET `/index` — 前端首页（含“拉取”按钮）
-  - GET `/index/modules` — 模块管理页
+  - GET `/index` — Vue 前端首页（含“拉取”按钮）
+  - GET `/index/modules` — Vue 模块管理页（room 绑定 + user 昵称绑定 + text 查看）
   - GET `/chat/archive/room-binding/admin` — roomid 绑定管理界面（Vue）
   - `/chat/archive/room-binding*` — roomid 绑定增删改查 API
+  - `/chat/archive/user-binding*` — user_id 昵称绑定增删改查 API
 - **完整的 AES 加解密与签名校验**
 - **被动回复消息**
 - 基于 `pydantic` 的消息模型
@@ -46,11 +47,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | 接口 | 方法 | 说明 |
 |---|---|---|
 | `/chat/archive` | POST | 拉取聊天记录并保存为 JSON |
-| `/index` | GET | 前端首页，提供“拉取”按钮调用 `/chat/archive` |
-| `/index/modules` | GET | 前端模块管理页 |
+| `/index` | GET | Vue 前端首页，提供“拉取”按钮调用 `/chat/archive` |
+| `/index/modules` | GET | Vue 前端模块管理页 |
 | `/chat/archive/room-binding/admin` | GET | 打开 roomid 绑定管理界面（Vue） |
 
-### 3. roomid 绑定管理
+### 3. 绑定与模块管理
 
 | 接口 | 方法 | 说明 |
 |---|---|---|
@@ -61,6 +62,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `/chat/archive/room-bindings` | GET | 查询绑定列表，支持 keyword 过滤 |
 | `/chat/archive/room-binding/{roomid}` | PUT | 更新绑定名称 |
 | `/chat/archive/room-binding/{roomid}` | DELETE | 删除绑定 |
+| `/chat/archive/user-binding` | POST | 新增 user_id 与昵称绑定 |
+| `/chat/archive/user-binding/{user_id}` | GET | 查询单个 user 昵称绑定 |
+| `/chat/archive/user-bindings` | GET | 查询 user 昵称绑定列表，支持 keyword 过滤 |
+| `/chat/archive/user-binding/{user_id}` | PUT | 更新 user 昵称 |
+| `/chat/archive/user-binding/{user_id}` | DELETE | 删除 user 昵称绑定 |
 
 #### 调用示例
 

@@ -25,3 +25,20 @@ class ChatArchiveRoomBinding(Base):
         onupdate=datetime.utcnow,
         nullable=False,
     )
+
+
+class ChatArchiveUserBinding(Base):
+    """会话存档用户绑定：userid 与昵称映射。"""
+
+    __tablename__ = "chat_archive_user_bindings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    nickname: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )

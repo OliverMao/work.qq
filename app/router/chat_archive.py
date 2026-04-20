@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.services.chat_archive import chat_archive_service
 from app.services.chat_archive_binding import chat_archive_binding_service
+from app.services.chat_archive_user_binding import chat_archive_user_binding_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -24,6 +25,15 @@ class CreateRoomBindingRequest(BaseModel):
 
 class UpdateRoomBindingRequest(BaseModel):
     room_name: str = Field(..., min_length=1, max_length=128)
+
+
+class CreateUserBindingRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+    nickname: str = Field(..., min_length=1, max_length=128)
+
+
+class UpdateUserBindingRequest(BaseModel):
+    nickname: str = Field(..., min_length=1, max_length=128)
 
 
 def _ok(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,10 +59,35 @@ def _value_error_code(message: str, default_code: int = 400) -> int:
     return default_code
 
 
+def _enrich_from_display(messages: Any) -> None:
+    if not isinstance(messages, list):
+        return
+
+    user_ids = []
+    for item in messages:
+        if not isinstance(item, dict):
+            continue
+        user_id = str(item.get("from") or "").strip()
+        if user_id:
+            user_ids.append(user_id)
+
+    nickname_map = chat_archive_user_binding_service.get_nickname_map(user_ids=user_ids)
+
+    for item in messages:
+        if not isinstance(item, dict):
+            continue
+        user_id = str(item.get("from") or "").strip()
+        if not user_id:
+            continue
+        nickname = nickname_map.get(user_id)
+        item["from_nickname"] = nickname
+        item["from_display"] = nickname or user_id
+
+
 @router.get("/archive/room-binding/admin")
 async def room_binding_admin_page():
     """会话存档群聊绑定管理页面。"""
-    page_path = Path(__file__).resolve().parents[1] / "static" / "chat_archive_binding_admin.html"
+    page_path = Path(__file__).resolve().parents[1] / "static" / "frontend" / "modules.html"
     return FileResponse(path=str(page_path), media_type="text/html")
 
 
@@ -127,6 +162,9 @@ async def get_group_archive_module(filename: str):
     """按 JSON 文件名读取群聊存档模块详情。"""
     try:
         result = chat_archive_service.get_group_archive_module(filename=filename)
+        messages = result.get("messages")
+        _enrich_from_display(messages)
+
         roomid = str(result.get("roomid") or "").strip()
         room_name = chat_archive_binding_service.get_room_name(roomid=roomid)
         if room_name:
@@ -143,6 +181,9 @@ async def get_group_archive_messages(roomid: str):
     """查看指定群聊(roomid)的全部本地聊天记录。"""
     try:
         result = chat_archive_service.get_group_archived_messages(roomid=roomid)
+        messages = result.get("messages")
+        _enrich_from_display(messages)
+
         room_name = chat_archive_binding_service.get_room_name(roomid=roomid)
         if room_name:
             result["room_name"] = room_name
@@ -219,3 +260,72 @@ async def delete_room_binding(roomid: str):
     except Exception as e:
         logger.exception("删除 roomid 绑定失败: roomid=%s", roomid)
         return _err(-1, str(e), roomid=roomid)
+
+
+@router.post("/archive/user-binding")
+async def create_user_binding(payload: CreateUserBindingRequest):
+    """创建 user_id 与昵称绑定。"""
+    try:
+        result = chat_archive_user_binding_service.create_binding(
+            user_id=payload.user_id,
+            nickname=payload.nickname,
+        )
+        return _ok(result)
+    except ValueError as e:
+        return _err(_value_error_code(str(e)), str(e))
+    except Exception as e:
+        logger.exception("创建 user_id 昵称绑定失败")
+        return _err(-1, str(e))
+
+
+@router.get("/archive/user-binding/{user_id}")
+async def get_user_binding(user_id: str):
+    """获取单个 user_id 的昵称绑定信息。"""
+    try:
+        result = chat_archive_user_binding_service.get_binding(user_id=user_id)
+        return _ok(result)
+    except ValueError as e:
+        return _err(_value_error_code(str(e), default_code=404), str(e), user_id=user_id)
+    except Exception as e:
+        logger.exception("查询 user_id 昵称绑定失败: user_id=%s", user_id)
+        return _err(-1, str(e), user_id=user_id)
+
+
+@router.get("/archive/user-bindings")
+async def list_user_bindings(keyword: Optional[str] = Query(default=None)):
+    """列出全部 user_id 昵称绑定，可按关键字过滤。"""
+    try:
+        result = chat_archive_user_binding_service.list_bindings(keyword=keyword)
+        return _ok(result)
+    except Exception as e:
+        logger.exception("查询 user_id 昵称绑定列表失败")
+        return _err(-1, str(e), count=0, items=[])
+
+
+@router.put("/archive/user-binding/{user_id}")
+async def update_user_binding(user_id: str, payload: UpdateUserBindingRequest):
+    """更新指定 user_id 的昵称。"""
+    try:
+        result = chat_archive_user_binding_service.update_binding(
+            user_id=user_id,
+            nickname=payload.nickname,
+        )
+        return _ok(result)
+    except ValueError as e:
+        return _err(_value_error_code(str(e), default_code=404), str(e), user_id=user_id)
+    except Exception as e:
+        logger.exception("更新 user_id 昵称绑定失败: user_id=%s", user_id)
+        return _err(-1, str(e), user_id=user_id)
+
+
+@router.delete("/archive/user-binding/{user_id}")
+async def delete_user_binding(user_id: str):
+    """删除指定 user_id 的昵称绑定信息。"""
+    try:
+        result = chat_archive_user_binding_service.delete_binding(user_id=user_id)
+        return _ok(result)
+    except ValueError as e:
+        return _err(_value_error_code(str(e)), str(e), user_id=user_id)
+    except Exception as e:
+        logger.exception("删除 user_id 昵称绑定失败: user_id=%s", user_id)
+        return _err(-1, str(e), user_id=user_id)
