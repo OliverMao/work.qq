@@ -45,6 +45,10 @@ class AutoBindUsersRequest(BaseModel):
     limit: int = Field(default=1000, ge=1, le=10000)
 
 
+class QuerySingleUserBindingRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=128)
+
+
 def _ok(payload: Dict[str, Any]) -> Dict[str, Any]:
     result = dict(payload)
     result.setdefault("errcode", 0)
@@ -100,10 +104,39 @@ def _fetch_externalcontact_user_nickname(access_token: str, user_id: str) -> str
     if data.get("errcode") != 0:
         raise RuntimeError(f"externalcontact/get 失败: {data}")
 
-    nickname = str(data.get("name") or data.get("alias") or "").strip()
+    external_contact = data.get("external_contact")
+    nickname = ""
+    if isinstance(external_contact, dict):
+        nickname = str(external_contact.get("name") or "").strip()
+    if not nickname:
+        nickname = str(data.get("name") or data.get("alias") or "").strip()
     if not nickname:
         raise RuntimeError("externalcontact/get 未返回可用昵称")
     return nickname
+
+
+def _query_user_nickname_by_user_id(access_token: str, user_id: str) -> Dict[str, str]:
+    # `wo/wm` 前缀视为外部联系人，其他按企业内部成员查询。
+    if _is_wecom_user_id(user_id):
+        nickname = _fetch_externalcontact_user_nickname(
+            access_token=access_token,
+            user_id=user_id,
+        )
+        return {
+            "nickname": nickname,
+            "query_api": "externalcontact/get",
+            "user_type": "external",
+        }
+
+    nickname = _fetch_wecom_user_nickname(
+        access_token=access_token,
+        user_id=user_id,
+    )
+    return {
+        "nickname": nickname,
+        "query_api": "user/get",
+        "user_type": "internal",
+    }
 
 
 def _enrich_from_display(messages: Any) -> None:
@@ -454,10 +487,11 @@ async def auto_query_and_bind_users(payload: AutoBindUsersRequest):
         for user_id in target_user_ids:
             queried_count += 1
             try:
-                if _is_wecom_user_id(user_id):
-                    nickname = _fetch_wecom_user_nickname(access_token=access_token, user_id=user_id)
-                else:
-                    nickname = _fetch_externalcontact_user_nickname(access_token=access_token, user_id=user_id)
+                query_result = _query_user_nickname_by_user_id(
+                    access_token=access_token,
+                    user_id=user_id,
+                )
+                nickname = query_result["nickname"]
                 bind_result = chat_archive_user_binding_service.upsert_binding(
                     user_id=user_id,
                     nickname=nickname,
@@ -475,6 +509,8 @@ async def auto_query_and_bind_users(payload: AutoBindUsersRequest):
                         "user_id": user_id,
                         "nickname": bind_result.get("nickname"),
                         "action": action,
+                        "query_api": query_result.get("query_api"),
+                        "user_type": query_result.get("user_type"),
                     }
                 )
             except Exception as err:
@@ -506,6 +542,47 @@ async def auto_query_and_bind_users(payload: AutoBindUsersRequest):
         )
     except Exception as e:
         logger.exception("一键查询并绑定 user_id 失败")
+        return _err(-1, str(e))
+
+
+@router.post("/archive/user-bindings/query-one")
+async def query_and_bind_single_user(payload: QuerySingleUserBindingRequest):
+    """单条查询并绑定：按 user_id 查询昵称并执行 upsert。"""
+    try:
+        user_id = str(payload.user_id or "").strip()
+        if not user_id:
+            raise ValueError("user_id 不能为空")
+
+        app_secret = str(settings.app_secret or "").strip()
+        if not app_secret:
+            raise RuntimeError("WECOM_APP_SECRET 未配置，无法执行单条查询绑定")
+
+        access_token = wecom_api_client.get_access_token(secret=app_secret)
+        if not access_token:
+            raise RuntimeError("无法获取企业微信 access_token")
+
+        query_result = _query_user_nickname_by_user_id(
+            access_token=access_token,
+            user_id=user_id,
+        )
+        bind_result = chat_archive_user_binding_service.upsert_binding(
+            user_id=user_id,
+            nickname=query_result["nickname"],
+        )
+
+        return _ok(
+            {
+                "user_id": user_id,
+                "nickname": bind_result.get("nickname"),
+                "action": bind_result.get("action"),
+                "query_api": query_result.get("query_api"),
+                "user_type": query_result.get("user_type"),
+            }
+        )
+    except ValueError as e:
+        return _err(_value_error_code(str(e), default_code=400), str(e))
+    except Exception as e:
+        logger.exception("单条查询并绑定 user_id 失败")
         return _err(-1, str(e))
 
 

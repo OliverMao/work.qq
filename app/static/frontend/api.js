@@ -106,6 +106,15 @@ export function autoBindUserNicknames(payload = {}) {
   });
 }
 
+export function querySingleUserNickname(userId) {
+  return apiRequest("/chat/archive/user-bindings/query-one", {
+    method: "POST",
+    body: {
+      user_id: userId,
+    },
+  });
+}
+
 export function createUserBinding(userId, nickname) {
   return apiRequest("/chat/archive/user-binding", {
     method: "POST",

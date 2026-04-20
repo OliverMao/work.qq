@@ -17,6 +17,7 @@
   - `/chat/archive/user-binding*` — user_id 昵称绑定增删改查 API
   - GET `/chat/archive/user-candidates` — 扫描聊天文件并返回去重 user_id 候选池
   - POST `/chat/archive/user-bindings/auto-bind` — 一键查询企业微信昵称并自动绑定
+  - POST `/chat/archive/user-bindings/query-one` — 按单个 user_id 查询并绑定
 - **完整的 AES 加解密与签名校验**
 - **被动回复消息**
 - 基于 `pydantic` 的消息模型
@@ -70,7 +71,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `/chat/archive/user-binding/{user_id}` | GET | 查询单个 user 昵称绑定 |
 | `/chat/archive/user-bindings` | GET | 查询 user 昵称绑定列表，支持 keyword 过滤 |
 | `/chat/archive/user-candidates` | GET | 扫描全部聊天文件并返回去重 user_id 候选池 |
-| `/chat/archive/user-bindings/auto-bind` | POST | 一键自动查询昵称并执行 upsert 绑定（仅 `wo/wm` 前缀） |
+| `/chat/archive/user-bindings/auto-bind` | POST | 批量自动查询昵称并执行 upsert（按内外部用户自动分流接口） |
+| `/chat/archive/user-bindings/query-one` | POST | 单条查询昵称并执行 upsert（按内外部用户自动分流接口） |
 | `/chat/archive/user-binding/{user_id}` | PUT | 更新 user 昵称 |
 | `/chat/archive/user-binding/{user_id}` | DELETE | 删除 user 昵称绑定 |
 
@@ -109,7 +111,7 @@ curl -X POST "http://localhost:8000/chat/archive?starttime=1704067200&endtime=17
 | `WECOM_ENCODING_AES_KEY` | 43位 EncodingAESKey | ✅ |
 | `WECOM_AGENT_ID` | 应用 ID | |
 | `WECOM_CORP_SECRET` | 企业应用 Secret（所有接口统一使用） | ✅ |
-| `WECOM_APP_SECRET` | 一键自动绑定昵称时用于调用 `user/get` 的 Secret | |
+| `WECOM_APP_SECRET` | 自动绑定昵称时用于调用企业微信用户查询接口的 Secret | |
 | `WECOM_CHAT_ARCHIVE_SAVE_DIR` | 存档保存目录，默认 `archive_data/` | |
 
 ### 获取会话存档配置

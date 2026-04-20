@@ -1,18 +1,15 @@
 import { createApp } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import {
-  listUserBindings,
   listArchiveUserCandidates,
   autoBindUserNicknames,
+  querySingleUserNickname,
   createUserBinding,
   updateUserBinding,
-  deleteUserBinding,
 } from "/static/frontend/api.js";
 
 createApp({
   data() {
     return {
-      keyword: "",
-      keywordInput: "",
       candidateKeyword: "",
       candidateKeywordInput: "",
       candidateStats: {
@@ -24,20 +21,18 @@ createApp({
         limit: 1000,
       },
       autoBindResult: null,
-      userForm: {
+      bindingDialog: {
+        visible: false,
         user_id: "",
         nickname: "",
+        is_bound: false,
       },
-      userBindings: [],
       userCandidates: [],
-      userEditMap: {},
       loading: {
-        list: false,
         candidates: false,
         autoBind: false,
-        create: false,
-        updateId: "",
-        deleteId: "",
+        queryOneId: "",
+        bindingSave: false,
       },
       message: {
         text: "",
@@ -54,7 +49,6 @@ createApp({
     },
   },
   mounted() {
-    this.refreshUserBindings();
     this.refreshUserCandidates();
   },
   methods: {
@@ -75,19 +69,6 @@ createApp({
         return String(value);
       }
       return date.toLocaleString("zh-CN", { hour12: false });
-    },
-    syncUserEditMap() {
-      const map = {};
-      this.userBindings.forEach((item) => {
-        map[item.user_id] = item.nickname || "";
-      });
-      this.userEditMap = map;
-    },
-    onUserNicknameEdit(userId, value) {
-      this.userEditMap = {
-        ...this.userEditMap,
-        [userId]: value,
-      };
     },
     normalizeLimit(value) {
       const n = Number(value);
@@ -110,6 +91,76 @@ createApp({
         return "不变";
       }
       return action || "-";
+    },
+    bindingButtonText(item) {
+      return `修改（${item.is_bound ? "已绑定" : "未绑定"}）`;
+    },
+    openBindingDialog(item) {
+      this.bindingDialog = {
+        visible: true,
+        user_id: item.user_id || "",
+        nickname: item.nickname || "",
+        is_bound: Boolean(item.is_bound),
+      };
+    },
+    closeBindingDialog() {
+      if (this.loading.bindingSave) {
+        return;
+      }
+      this.bindingDialog.visible = false;
+    },
+    async saveBindingFromDialog() {
+      if (this.loading.bindingSave) {
+        return;
+      }
+
+      const userId = String(this.bindingDialog.user_id || "").trim();
+      const nickname = String(this.bindingDialog.nickname || "").trim();
+      if (!userId || !nickname) {
+        this.setMessage("user_id 和昵称不能为空", "warn");
+        return;
+      }
+
+      this.loading.bindingSave = true;
+      this.clearMessage();
+      try {
+        if (this.bindingDialog.is_bound) {
+          await updateUserBinding(userId, nickname);
+        } else {
+          await createUserBinding(userId, nickname);
+        }
+        this.setMessage(`绑定保存成功：${userId} -> ${nickname}`, "ok");
+        this.bindingDialog.visible = false;
+        await this.refreshUserCandidates();
+      } catch (err) {
+        this.setMessage(String(err.message || err), "error");
+      } finally {
+        this.loading.bindingSave = false;
+      }
+    },
+    async queryOneCandidate(item) {
+      const userId = String(item.user_id || "").trim();
+      if (!userId) {
+        this.setMessage("user_id 为空，无法查询", "warn");
+        return;
+      }
+
+      this.loading.queryOneId = userId;
+      this.clearMessage();
+      try {
+        const data = await querySingleUserNickname(userId);
+        const userTypeText = data.user_type === "external" ? "外部用户" : "内部用户";
+        const actionText = this.formatAction(data.action);
+        this.setMessage(
+          `查询完成：${userId} -> ${data.nickname || "-"}（${userTypeText}，${data.query_api || "-"}，${actionText}）`,
+          "ok",
+        );
+        await this.refreshUserCandidates();
+      } catch (err) {
+        this.setMessage(String(err.message || err), "error");
+      } finally {
+        this.loading.queryOneId = "";
+      }
     },
     async refreshUserCandidates() {
       this.loading.candidates = true;
@@ -167,92 +218,11 @@ createApp({
         ].join("，");
         this.setMessage(`一键查询并绑定完成：${summary}`, "ok");
 
-        await Promise.all([this.refreshUserBindings(), this.refreshUserCandidates()]);
+        await this.refreshUserCandidates();
       } catch (err) {
         this.setMessage(String(err.message || err), "error");
       } finally {
         this.loading.autoBind = false;
-      }
-    },
-
-    async refreshUserBindings() {
-      this.loading.list = true;
-      try {
-        const data = await listUserBindings(this.keyword);
-        this.userBindings = data.items || [];
-        this.syncUserEditMap();
-      } catch (err) {
-        this.userBindings = [];
-        this.userEditMap = {};
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.list = false;
-      }
-    },
-    async applyFilter() {
-      this.keyword = this.keywordInput.trim();
-      await this.refreshUserBindings();
-    },
-
-    async createUserNickname() {
-      const userId = this.userForm.user_id.trim();
-      const nickname = this.userForm.nickname.trim();
-      if (!userId || !nickname) {
-        this.setMessage("user_id 和 昵称 不能为空", "warn");
-        return;
-      }
-
-      this.loading.create = true;
-      this.clearMessage();
-      try {
-        await createUserBinding(userId, nickname);
-        this.userForm.user_id = "";
-        this.userForm.nickname = "";
-        this.setMessage(`用户昵称绑定已创建: ${userId}`, "ok");
-        await this.refreshUserBindings();
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.create = false;
-      }
-    },
-
-    async saveUserNickname(item) {
-      const nickname = (this.userEditMap[item.user_id] || "").trim();
-      if (!nickname) {
-        this.setMessage("昵称不能为空", "warn");
-        return;
-      }
-
-      this.loading.updateId = item.user_id;
-      this.clearMessage();
-      try {
-        await updateUserBinding(item.user_id, nickname);
-        this.setMessage(`用户昵称绑定已更新: ${item.user_id}`, "ok");
-        await this.refreshUserBindings();
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.updateId = "";
-      }
-    },
-
-    async removeUserBinding(item) {
-      const ok = window.confirm(`确定删除用户昵称绑定?\nuser_id: ${item.user_id}`);
-      if (!ok) {
-        return;
-      }
-
-      this.loading.deleteId = item.user_id;
-      this.clearMessage();
-      try {
-        await deleteUserBinding(item.user_id);
-        this.setMessage(`用户昵称绑定已删除: ${item.user_id}`, "ok");
-        await this.refreshUserBindings();
-      } catch (err) {
-        this.setMessage(String(err.message || err), "error");
-      } finally {
-        this.loading.deleteId = "";
       }
     },
   },
