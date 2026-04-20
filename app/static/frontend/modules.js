@@ -260,6 +260,29 @@ createApp({
       };
     },
 
+    quickBindUser(userId) {
+      const normalizedId = String(userId || "").trim();
+      if (!normalizedId) {
+        return;
+      }
+
+      this.userForm.user_id = normalizedId;
+      const existed = this.userBindings.find((item) => item.user_id === normalizedId);
+      this.userForm.nickname = existed ? String(existed.nickname || "") : "";
+
+      const section = document.getElementById("user-binding-section");
+      if (section) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      this.$nextTick(() => {
+        const input = this.$refs.createUserNicknameInput;
+        if (input && typeof input.focus === "function") {
+          input.focus();
+        }
+      });
+    },
+
     async refreshUserBindings() {
       this.loading.users = true;
       try {

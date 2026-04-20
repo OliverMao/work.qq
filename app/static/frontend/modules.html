@@ -97,9 +97,10 @@
       <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="user-binding-section">
       <div class="meta-row" style="justify-content: space-between;">
         <strong style="font-size: 16px; color: #1a434b;">userid 昵称绑定管理</strong>
+        <span class="muted">当前 {{ userBindings.length }} 条</span>
       </div>
 
       <div class="grid" style="margin-bottom: 12px; grid-template-columns: 1fr 1fr auto;">
@@ -109,7 +110,7 @@
         </div>
         <div class="field">
           <label for="create-user-name">昵称</label>
-          <input id="create-user-name" v-model.trim="userForm.nickname" placeholder="例如: 小王" />
+          <input id="create-user-name" ref="createUserNicknameInput" v-model.trim="userForm.nickname" placeholder="例如: 小王" />
         </div>
         <div class="toolbar" style="align-self: end;">
           <button class="btn primary" :disabled="loading.userCreate" @click="createUserNickname">
@@ -206,6 +207,9 @@
                   <td>
                     <div>{{ msg.from_display }}</div>
                     <div class="muted" v-if="msg.from_display !== msg.from_user_id">{{ msg.from_user_id }}</div>
+                    <div class="toolbar" v-if="msg.from_display === msg.from_user_id" style="margin-top: 4px;">
+                      <button class="btn neutral small" @click="quickBindUser(msg.from_user_id)">绑定昵称</button>
+                    </div>
                   </td>
                   <td>{{ msg.action }}</td>
                   <td class="mono">{{ msg.roomid }}</td>
