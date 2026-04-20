@@ -7,3 +7,7 @@ keys
 sdk
 archive_data
 sql.db
+node_modules
+dist
+.vscode
+app\static\frontend\node_modules

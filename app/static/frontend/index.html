@@ -1,78 +1,13 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>会话存档前端入口</title>
-  <link rel="stylesheet" href="/static/frontend/styles.css" />
-</head>
-<body>
-  <div id="app" class="container">
-    <header class="hero">
-      <div>
-        <h1 class="title">会话存档前端项目</h1>
-        <div class="subtitle">Vue 双向绑定页面：首页负责拉取，会话模块管理与用户昵称绑定拆分为独立页面。</div>
-      </div>
-      <div class="hero-right">
-        <div class="tag">路径: /index</div>
-      </div>
-    </header>
-
-    <section class="panel">
-      <div class="grid">
-        <article class="card">
-          <h2 class="card-title">会话拉取</h2>
-          <p class="card-desc">点击“拉取”调用 /chat/archive，后端会按 msgid 去重后增量写入本地 JSON 存档。</p>
-          <div class="toolbar">
-            <button class="btn primary" :disabled="loading.pull" @click="handlePullArchive">
-              {{ loading.pull ? "拉取中..." : "拉取" }}
-            </button>
-            <a class="btn neutral" href="/index/modules">进入模块管理</a>
-            <a class="btn neutral" href="/index/users">用户绑定管理</a>
-          </div>
-          <div v-if="message.text" class="message" :class="message.type">{{ message.text }}</div>
-        </article>
-
-        <article class="card">
-          <h2 class="card-title">结果说明</h2>
-          <p class="card-desc">保存消息数表示本次新增落盘数量，跳过重复数表示按 msgid 去重后未重复写入的数量。</p>
-        </article>
-      </div>
-
-      <div v-if="lastResult" style="margin-top: 14px;">
-        <div class="metrics">
-          <div class="metric">
-            <div class="label">保存消息数</div>
-            <div class="value">{{ lastResult.saved_count || 0 }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">跳过重复数</div>
-            <div class="value">{{ lastResult.skip_duplicate_count || 0 }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">文件模块数</div>
-            <div class="value">{{ (lastResult.files || []).length }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">主文件路径</div>
-            <div class="value">{{ lastResult.save_path || "-" }}</div>
-          </div>
-          <div class="metric">
-            <div class="label">存档目录</div>
-            <div class="value">{{ lastResult.save_dir || "-" }}</div>
-          </div>
-        </div>
-
-        <div class="files" v-if="(lastResult.files || []).length > 0">
-          <div class="file-item" v-for="item in lastResult.files" :key="`${item.roomid}-${item.save_path}`">
-            <span class="mono">{{ item.roomid }}</span>
-            <span>新增 {{ item.count || 0 }} 条 / 总计 {{ item.total_count || 0 }} 条</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <script type="module" src="/static/frontend/index.js"></script>
-</body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>frontend</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

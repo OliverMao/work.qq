@@ -461,17 +461,27 @@ class ChatArchiveService:
                     continue
 
             stat = file_path.stat()
+            latest_msgtime = self._extract_latest_msgtime(messages)
             modules.append(
                 {
                     "filename": filename,
                     "roomid": roomid,
                     "save_path": str(file_path),
                     "message_count": len(messages),
-                    "latest_msgtime": self._extract_latest_msgtime(messages),
+                    "latest_msgtime": latest_msgtime,
                     "file_mtime": int(stat.st_mtime),
                     "parse_error": parse_error,
                 }
             )
+
+        # 管理页按“文件内最后一条消息时间”排序，确保时间线更符合业务语义。
+        modules.sort(
+            key=lambda item: (
+                -int(item.get("latest_msgtime") or 0),
+                -int(item.get("file_mtime") or 0),
+                str(item.get("filename") or ""),
+            )
+        )
 
         return {
             "count": len(modules),
