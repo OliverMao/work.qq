@@ -19,6 +19,7 @@ import requests
 
 try:
     from app.config import settings
+    from app.services.archive_text_preprocessor import ArchiveTextPreprocessor
     from app.services.wecom_api import wecom_api_client
 except ModuleNotFoundError:
     # 兼容直接运行本文件: python app/services/chat_archive.py
@@ -26,6 +27,7 @@ except ModuleNotFoundError:
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
     from app.config import settings
+    from app.services.archive_text_preprocessor import ArchiveTextPreprocessor
     from app.services.wecom_api import wecom_api_client
 
 logger = logging.getLogger(__name__)
@@ -558,6 +560,31 @@ class ChatArchiveService:
             "items": items,
         }
 
+    def _run_archive_text_preprocess(self, save_dir_path: Path) -> Dict[str, Any]:
+        output_dir = save_dir_path / "save"
+        try:
+            preprocessor = ArchiveTextPreprocessor(
+                source_dir=save_dir_path,
+                output_dir=output_dir,
+            )
+            result = preprocessor.run()
+            result["ok"] = True
+            logger.info(
+                "会话文本预处理完成: processed_files=%s, total_lines=%s, output_dir=%s",
+                result.get("processed_files", 0),
+                result.get("total_lines", 0),
+                result.get("output_dir"),
+            )
+            return result
+        except Exception as e:
+            logger.exception("会话文本预处理失败: source_dir=%s", save_dir_path)
+            return {
+                "ok": False,
+                "error": str(e),
+                "source_dir": str(save_dir_path),
+                "output_dir": str(output_dir),
+            }
+
 
 
     def archive_messages(
@@ -608,11 +635,12 @@ class ChatArchiveService:
             if msgid and not self._extract_msgid(message):
                 message = dict(message)
                 message["msgid"] = msgid
-        
+
             group_messages.setdefault(roomid, []).append(message)
 
         if not group_messages:
             logger.info("会话存档完成: 没有可保存的消息")
+            preprocess_result = self._run_archive_text_preprocess(save_dir_path)
             return {
                 "saved_count": 0,
                 "save_path": None,
@@ -620,6 +648,7 @@ class ChatArchiveService:
                 "skip_duplicate_count": skip_duplicate_count,
                 "files": [],
                 "messages": [],
+                "preprocess": preprocess_result,
             }
 
         saved_files: List[Dict[str, Any]] = []
@@ -691,6 +720,7 @@ class ChatArchiveService:
         saved_files.sort(key=lambda x: x["count"], reverse=True)
         non_empty_files = [item for item in saved_files if int(item.get("count", 0)) > 0]
         primary_path = non_empty_files[0]["save_path"] if len(non_empty_files) == 1 else None
+        preprocess_result = self._run_archive_text_preprocess(save_dir_path)
 
         return {
             "saved_count": saved_count,
@@ -699,6 +729,7 @@ class ChatArchiveService:
             "save_dir": save_dir,
             "files": saved_files,
             "messages": all_new_messages,
+            "preprocess": preprocess_result,
         }
 
 
