@@ -80,6 +80,24 @@
       white-space: nowrap;
     }
 
+    .hero-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .hero-link {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #2e4349;
+      background: #e8ddd0;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -436,7 +454,10 @@
         <h1 class="title">会话存档模块管理</h1>
         <div class="subtitle">以本地 JSON 文件为模块展示群聊记录，映射关系来自后端绑定表，点击即可查看群聊内容。</div>
       </div>
-      <div class="status-pill">共 {{ totalCount }} 个模块</div>
+      <div class="hero-right">
+        <a class="hero-link" href="/index">返回首页</a>
+        <div class="status-pill">共 {{ totalCount }} 个模块</div>
+      </div>
     </header>
 
     <section class="card">

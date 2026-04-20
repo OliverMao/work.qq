@@ -9,6 +9,8 @@
   - POST `/` — 接收消息/事件
 - **会话内容存档** — 拉取聊天记录并保存到本地
   - POST `/chat/archive` — 拉取并保存会话内容
+  - GET `/index` — 前端首页（含“拉取”按钮）
+  - GET `/index/modules` — 模块管理页
   - GET `/chat/archive/room-binding/admin` — roomid 绑定管理界面（Vue）
   - `/chat/archive/room-binding*` — roomid 绑定增删改查 API
 - **完整的 AES 加解密与签名校验**
@@ -44,6 +46,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | 接口 | 方法 | 说明 |
 |---|---|---|
 | `/chat/archive` | POST | 拉取聊天记录并保存为 JSON |
+| `/index` | GET | 前端首页，提供“拉取”按钮调用 `/chat/archive` |
+| `/index/modules` | GET | 前端模块管理页 |
 | `/chat/archive/room-binding/admin` | GET | 打开 roomid 绑定管理界面（Vue） |
 
 ### 3. roomid 绑定管理
