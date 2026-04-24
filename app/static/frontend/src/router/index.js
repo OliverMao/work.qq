@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import IndexView from '../views/IndexView.vue';
 import UsersView from '../views/UsersView.vue';
 import ModulesView from '../views/ModulesView.vue';
+import AgentView from '../views/AgentView.vue';
+import PromptView from '../views/PromptView.vue';
 
 const routes = [
   {
@@ -29,6 +31,24 @@ const routes = [
     meta: {
       title: '模块管理',
       description: '按会话 JSON 模块维护群聊映射并查看 text 消息',
+    },
+  },
+  {
+    path: '/agent',
+    name: 'agent',
+    component: AgentView,
+    meta: {
+      title: 'Agent 测试',
+      description: '测试 Agent 对话生成和构建向量索引',
+    },
+  },
+  {
+    path: '/prompts',
+    name: 'prompts',
+    component: PromptView,
+    meta: {
+      title: 'Prompt 管理',
+      description: '编辑 Agent 的三个提示词文件',
     },
   },
 ];

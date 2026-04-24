@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.router.agent import router as agent_router
+from app.router.agent_prompt import router as agent_prompt_router
 from app.router.chat_archive import router as chat_archive_router
 from app.router.frontend_pages import router as frontend_pages_router
 # from app.router.chat_group import router as chat_group_router
@@ -14,3 +15,4 @@ router.include_router(chat_archive_router)
 # router.include_router(chat_group_router)
 router.include_router(user_directory_router)
 router.include_router(agent_router)
+router.include_router(agent_prompt_router)

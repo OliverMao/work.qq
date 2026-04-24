@@ -1,45 +1,48 @@
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
-    <n-global-style />
-    <n-layout has-sider class="admin-shell">
-      <n-layout-sider
+    <n-message-provider>
+      <n-dialog-provider>
+        <n-notification-provider>
+          <n-global-style />
+          <n-layout has-sider class="admin-shell">
+<n-layout-sider
         bordered
-        collapse-mode="width"
-        :collapsed-width="64"
         :width="220"
         :native-scrollbar="false"
-        show-trigger="bar"
         class="admin-sider"
         inverted
       >
-        <div class="brand-area">
-          <div class="brand-mark">QA</div>
-          <div class="brand-text">
-            <div class="brand-title">会话存档</div>
-            <div class="brand-subtitle">管理后台</div>
-          </div>
-        </div>
+              <div class="brand-area">
+                <div class="brand-mark">QA</div>
+                <div class="brand-text">
+                  <div class="brand-title">会话存档</div>
+                  <div class="brand-subtitle">管理后台</div>
+                </div>
+              </div>
 
-        <n-menu
-          inverted
-          :value="activeMenuKey"
-          :options="menuOptions"
-          @update:value="handleMenuSelect"
-        />
-      </n-layout-sider>
+              <n-menu
+                inverted
+                :value="activeMenuKey"
+                :options="menuOptions"
+                @update:value="handleMenuSelect"
+              />
+            </n-layout-sider>
 
-      <n-layout>
-        <n-layout-header bordered class="admin-header">
-          <div class="header-title">{{ currentPageTitle }}</div>
-          <div class="header-subtitle">{{ currentPageDescription }}</div>
-        </n-layout-header>
-        <n-layout-content class="admin-content">
-          <div class="content-inner">
-            <router-view />
-          </div>
-        </n-layout-content>
-      </n-layout>
-    </n-layout>
+            <n-layout>
+              <n-layout-header bordered class="admin-header">
+                <div class="header-title">{{ currentPageTitle }}</div>
+                <div class="header-subtitle">{{ currentPageDescription }}</div>
+              </n-layout-header>
+              <n-layout-content class="admin-content">
+                <div class="content-inner">
+                  <router-view />
+                </div>
+              </n-layout-content>
+            </n-layout>
+          </n-layout>
+        </n-notification-provider>
+      </n-dialog-provider>
+    </n-message-provider>
   </n-config-provider>
 </template>
 
@@ -53,6 +56,9 @@ import {
   NLayoutHeader,
   NLayoutSider,
   NMenu,
+  NMessageProvider,
+  NDialogProvider,
+  NNotificationProvider,
 } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -71,6 +77,14 @@ const menuOptions = [
   {
     label: '用户绑定',
     key: '/users',
+  },
+  {
+    label: 'Agent 测试',
+    key: '/agent',
+  },
+  {
+    label: 'Prompt 管理',
+    key: '/prompts',
   },
 ];
 
