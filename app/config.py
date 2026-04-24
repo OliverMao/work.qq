@@ -71,6 +71,97 @@ class Settings:
     def corp_secret(self) -> str:
         return self._env.get("WECOM_CORP_SECRET", "")
 
+    @property
+    def teacher_agent_archive_dir(self) -> str:
+        default = Path(__file__).parent.parent / "archive_data" / "save"
+        return self._env.get("TEACHER_AGENT_ARCHIVE_DIR", str(default))
+
+    @property
+    def teacher_agent_vector_dir(self) -> str:
+        default = Path(__file__).parent.parent / "archive_data" / "vector_db" / "teacher_assistant"
+        return self._env.get("TEACHER_AGENT_VECTOR_DIR", str(default))
+
+    @property
+    def teacher_agent_prompt_dir(self) -> str:
+        default = Path(__file__).parent / "services" / "agent" / "prompt"
+        return self._env.get("TEACHER_AGENT_PROMPT_DIR", str(default))
+
+    @property
+    def teacher_agent_collection_name(self) -> str:
+        return self._env.get("TEACHER_AGENT_COLLECTION_NAME", "teacher_assistant_dialogue_v1")
+
+    @property
+    def teacher_agent_window_size(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_WINDOW_SIZE", "6"))
+
+    @property
+    def teacher_agent_window_overlap(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_WINDOW_OVERLAP", "2"))
+
+    @property
+    def teacher_agent_same_chat_top_k(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_SAME_CHAT_TOP_K", "4"))
+
+    @property
+    def teacher_agent_global_top_k(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_GLOBAL_TOP_K", "3"))
+
+    @property
+    def teacher_agent_min_same_chat_hits(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_MIN_SAME_CHAT_HITS", "2"))
+
+    @property
+    def teacher_agent_max_context_chunks(self) -> int:
+        return int(self._env.get("TEACHER_AGENT_MAX_CONTEXT_CHUNKS", "6"))
+
+    @property
+    def teacher_agent_distance_threshold(self) -> float:
+        return float(self._env.get("TEACHER_AGENT_DISTANCE_THRESHOLD", "1.25"))
+
+    @property
+    def teacher_agent_embedding_provider(self) -> str:
+        return self._env.get("TEACHER_AGENT_EMBEDDING_PROVIDER", "openai")
+
+    @property
+    def teacher_agent_embedding_model(self) -> str:
+        return self._env.get("TEACHER_AGENT_EMBEDDING_MODEL", "text-embedding-3-small")
+
+    @property
+    def teacher_agent_embedding_api_key(self) -> str:
+        return self._env.get(
+            "TEACHER_AGENT_EMBEDDING_API_KEY",
+            self._env.get("TEACHER_AGENT_EMBEDDING_TOKEN", ""),
+        )
+
+    @property
+    def teacher_agent_embedding_base_url(self) -> str:
+        return self._env.get(
+            "TEACHER_AGENT_EMBEDDING_BASE_URL",
+            self._env.get("TEACHER_AGENT_EMBEDDING_HOST", ""),
+        )
+
+    @property
+    def teacher_agent_llm_model(self) -> str:
+        return self._env.get("TEACHER_AGENT_LLM_MODEL", "gpt-4o-mini")
+
+    @property
+    def teacher_agent_llm_api_key(self) -> str:
+        return self._env.get(
+            "TEACHER_AGENT_LLM_API_KEY",
+            self._env.get("TEACHER_AGENT_LLM_TOKEN", ""),
+        )
+
+    @property
+    def teacher_agent_llm_base_url(self) -> str:
+        return self._env.get(
+            "TEACHER_AGENT_LLM_BASE_URL",
+            self._env.get("TEACHER_AGENT_LLM_HOST", ""),
+        )
+
+    @property
+    def teacher_agent_llm_temperature(self) -> float:
+        return float(self._env.get("TEACHER_AGENT_LLM_TEMPERATURE", "0.4"))
+
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)
 

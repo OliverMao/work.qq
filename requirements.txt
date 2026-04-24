@@ -7,3 +7,13 @@ xmltodict
 typing-extensions
 httpx
 sqlalchemy
+
+
+# Agent
+langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-chroma
+chromadb
+zstandard==0.25.0

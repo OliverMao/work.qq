@@ -1,4 +1,10 @@
+
 # 企业微信消息接收 FastAPI 后端
+
+
+## Embedding 模型
+依赖宿主机ollama run qwen3-embedding:0.6b
+
 
 参考 [企业微信官方文档 - 接收消息与事件](https://developer.work.weixin.qq.com/document/path/90238)。
 

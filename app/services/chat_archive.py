@@ -590,14 +590,14 @@ class ChatArchiveService:
     def archive_messages(
         self,
         limit: int = 1000,
+        auto_build_index: bool = True,
     ) -> dict:
         """
         拉取并保存会话内容到本地文件（按群聊拆分）
 
         Args:
-            begin_time: 开始时间戳 (秒)
-            end_time:   结束时间戳 (秒)
             limit:      拉取条数 (最大1000)
+            auto_build_index: 拉取后是否自动构建向量索引，默认 True
 
                 Returns:
                         {
@@ -605,7 +605,8 @@ class ChatArchiveService:
                             "save_path": "...",  # 仅有一个群聊文件时返回
                             "save_dir": "...",
                             "files": [...],
-                            "messages": [...]
+                            "messages": [...],
+                            "build_index": {...}  # 仅当 auto_build_index=True 时返回
                         }
         """
 
@@ -722,7 +723,17 @@ class ChatArchiveService:
         primary_path = non_empty_files[0]["save_path"] if len(non_empty_files) == 1 else None
         preprocess_result = self._run_archive_text_preprocess(save_dir_path)
 
-        return {
+        build_index_result = None
+        if auto_build_index:
+            try:
+                from app.services.agent.agent import build_teacher_assistant_index
+                build_index_result = build_teacher_assistant_index(rebuild=False)
+                logger.info("自动构建向量索引完成: added=%s", build_index_result.get("added_chunk_count", 0))
+            except Exception as e:
+                logger.warning("自动构建向量索引失败: %s", e)
+                build_index_result = {"ok": False, "error": str(e)}
+
+        result = {
             "saved_count": saved_count,
             "skip_duplicate_count": skip_duplicate_count + merge_duplicate_count,
             "save_path": primary_path,
@@ -731,6 +742,9 @@ class ChatArchiveService:
             "messages": all_new_messages,
             "preprocess": preprocess_result,
         }
+        if auto_build_index:
+            result["build_index"] = build_index_result
+        return result
 
 
 chat_archive_service = ChatArchiveService()

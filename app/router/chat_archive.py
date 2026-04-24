@@ -171,12 +171,16 @@ async def room_binding_admin_page():
     return FileResponse(path=str(page_path), media_type="text/html")
 
 
+class ChatArchiveRequest(BaseModel):
+    auto_build_index: bool = True
+
+
 @router.post("/archive")
-async def chat_archive():
+async def chat_archive(req: ChatArchiveRequest = ChatArchiveRequest()):
     """拉取会话内容存档并保存到本地 JSON 文件。"""
     try:
-        logger.info("收到会话存档请求")
-        result = chat_archive_service.archive_messages()
+        logger.info("收到会话存档请求, auto_build_index=%s", req.auto_build_index)
+        result = chat_archive_service.archive_messages(auto_build_index=req.auto_build_index)
         logger.info(
             "会话存档完成: saved_count=%s, skip_duplicate_count=%s, save_path=%s",
             result.get("saved_count", 0),
