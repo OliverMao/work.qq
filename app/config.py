@@ -4,6 +4,7 @@
 
 import os
 from pathlib import Path
+from typing import Dict, List
 from dotenv import dotenv_values
 
 
@@ -161,6 +162,34 @@ class Settings:
     @property
     def teacher_agent_llm_temperature(self) -> float:
         return float(self._env.get("TEACHER_AGENT_LLM_TEMPERATURE", "0.4"))
+
+    @property
+    def teacher_agent_model_aliases(self) -> Dict[str, str]:
+        raw = self._env.get("TEACHER_AGENT_MODEL_ALIASES", "")
+        if not raw:
+            return {}
+        result = {}
+        for item in raw.split(","):
+            if not item or ":" not in item:
+                continue
+            parts = item.split(":", 1)
+            if len(parts) == 2:
+                result[parts[0].strip()] = parts[1].strip()
+        return result
+
+    @property
+    def teacher_agent_default_models(self) -> List[Dict[str, str]]:
+        raw = self._env.get("TEACHER_AGENT_DEFAULT_MODELS", "")
+        if not raw:
+            return []
+        result = []
+        for item in raw.split(","):
+            if not item or ":" not in item:
+                continue
+            parts = item.split(":", 1)
+            if len(parts) == 2:
+                result.append({"id": parts[0].strip(), "name": parts[1].strip()})
+        return result
 
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)

@@ -165,9 +165,12 @@ async function loadModelOptions() {
   try {
     const data = await listAvailableModels();
     modelOptions.value = (data.models || []).map(m => ({
-      label: m.id,
+      label: m.name,
       value: m.id,
     }));
+    if (modelOptions.value.length > 0) {
+      model.value = modelOptions.value[0].value;
+    }
   } catch (e) {
     console.warn('加载模型列表失败:', e);
     modelOptions.value = [];
