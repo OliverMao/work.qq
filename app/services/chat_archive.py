@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple, Set
 
-import requests
+import httpx
 
 try:
     from app.config import settings

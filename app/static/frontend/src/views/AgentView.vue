@@ -5,13 +5,23 @@
         <n-card title="对话测试">
           <n-form label-placement="left" label-width="80">
             <n-form-item label="模型">
-              <n-input v-model:value="model" placeholder="留空使用默认模型" />
+              <n-select
+                v-model:value="model"
+                filterable
+                :loading="loadingModels"
+                :options="modelOptions"
+                placeholder="选择模型"
+              />
             </n-form-item>
-            <n-form-item label="会话ID">
-              <n-input-group>
-                <n-input v-model:value="chatId" placeholder="输入会话ID" />
-                <n-button type="info" @click="loadHistory" :loading="loadingHistory">查询历史</n-button>
-              </n-input-group>
+            <n-form-item label="选择群聊">
+              <n-select
+                v-model:value="selectedGroup"
+                filterable
+                :loading="loadingGroups"
+                :options="groupOptions"
+                placeholder="搜索群聊"
+                @update:value="handleGroupChange"
+              />
             </n-form-item>
             <n-form-item label="学生消息">
               <n-input
@@ -20,6 +30,14 @@
                 :rows="4"
                 placeholder="输入学生/家长的问题"
               />
+            </n-form-item>
+            <n-form-item>
+              <n-space>
+                <n-button type="primary" :loading="loading" @click="handleReply">
+                  生成回复
+                </n-button>
+                <n-button @click="clearAll">清空</n-button>
+              </n-space>
             </n-form-item>
           </n-form>
         </n-card>
@@ -41,7 +59,7 @@
           <div class="history-list" v-if="historyList.length">
             <div v-for="(item, idx) in historyList" :key="idx" class="history-item">
               <n-tag :type="item.role === 'stu' ? 'info' : 'warning'" size="small">
-                {{ item.role === 'stu' ? '学生/家长' : '教师' }}
+                {{ item.role === 'stu' ? '家长' : '教师' }}
               </n-tag>
               <span class="history-text">{{ item.content }}</span>
               <n-button text type="error" @click="removeHistory(idx)">删除</n-button>
@@ -49,13 +67,6 @@
           </div>
           <n-empty v-else description="暂无历史记录" size="small" />
         </n-card>
-
-        <div class="action-bar">
-          <n-button type="primary" :loading="loading" @click="handleReply" size="large">
-            生成回复
-          </n-button>
-          <n-button @click="clearAll" size="large">清空</n-button>
-        </div>
       </n-gi>
 
       <n-gi>
@@ -104,7 +115,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import {
   NGrid,
   NGi,
@@ -112,7 +123,6 @@ import {
   NForm,
   NFormItem,
   NInput,
-  NInputGroup,
   NButton,
   NSelect,
   NTag,
@@ -120,16 +130,19 @@ import {
   NDivider,
   useMessage,
 } from 'naive-ui';
-import { teacherReply, buildAgentIndex, loadHistoryByFilename } from '../services/api-agent.js';
+import { teacherReply, buildAgentIndex, loadHistoryByFilename, listGroupModules, listAvailableModels } from '../services/api-agent.js';
 
 const message = useMessage();
 
 const loading = ref(false);
-const loadingHistory = ref(false);
+const loadingModels = ref(false);
+const loadingGroups = ref(false);
 const buildingIndex = ref(false);
 
-const model = ref('');
-const chatId = ref('');
+const model = ref(null);
+const modelOptions = ref([]);
+const selectedGroup = ref(null);
+const groupOptions = ref([]);
 const stuMessage = ref('');
 const historyList = ref([]);
 const newHistoryRole = ref('stu');
@@ -143,30 +156,84 @@ const roleOptions = [
   { label: '教师', value: 'tea' },
 ];
 
-async function loadHistory() {
-  if (!chatId.value.trim()) {
-    message.warning('请输入会话ID');
-    return;
-  }
-  loadingHistory.value = true;
+onMounted(async () => {
+  await Promise.all([loadModelOptions(), loadGroupOptions()]);
+});
+
+async function loadModelOptions() {
+  loadingModels.value = true;
   try {
-    const res = await loadHistoryByFilename(chatId.value.trim() + '.json');
-    if (res.messages && res.messages.length) {
-      historyList.value = res.messages
-        .filter(m => m.from && m.content)
-        .map(m => ({
-          role: m.from.toLowerCase().includes('wo') || m.from === 'wxwork' ? 'stu' : 'tea',
-          content: m.content,
-        }));
+    const data = await listAvailableModels();
+    modelOptions.value = (data.models || []).map(m => ({
+      label: m.id,
+      value: m.id,
+    }));
+  } catch (e) {
+    console.warn('加载模型列表失败:', e);
+    modelOptions.value = [];
+  } finally {
+    loadingModels.value = false;
+  }
+}
+
+async function loadGroupOptions() {
+  loadingGroups.value = true;
+  try {
+    const data = await listGroupModules();
+    groupOptions.value = (data.items || []).map(item => ({
+      label: item.room_name || item.roomid,
+      value: item.filename,
+    }));
+  } catch (e) {
+    message.error('加载群聊列表失败');
+  } finally {
+    loadingGroups.value = false;
+  }
+}
+
+function getMessageContent(m) {
+  if (typeof m === 'string') return m;
+  if (m.content) return m.content;
+  if (m.text && m.text.content) return m.text.content;
+  if (m.msgtype === 'text' && m.text) return typeof m.text === 'string' ? m.text : m.text.content;
+  return null;
+}
+
+function getMessageRole(from) {
+  if (!from) return 'stu';
+  const f = from.toLowerCase();
+  if (f.startsWith('wm')) return 'stu';
+  return 'tea';
+}
+
+async function handleGroupChange(filename) {
+  if (!filename) return;
+  loadingGroups.value = true;
+  try {
+    const res = await loadHistoryByFilename(filename);
+    const messages = res.messages || [];
+    if (messages.length) {
+      const validMessages = [];
+      for (const m of messages) {
+        const content = getMessageContent(m);
+        if (content) {
+          validMessages.push({
+            role: getMessageRole(m.from),
+            content: content, 
+          });
+        }
+      }
+      historyList.value = validMessages;
       message.success(`已加载 ${historyList.value.length} 条记录`);
     } else {
       historyList.value = [];
       message.info('无历史记录');
     }
   } catch (e) {
-    message.error('查询失败: ' + (e.message || e));
+    historyList.value = [];
+    message.error('加载失败: ' + (e.message || e));
   } finally {
-    loadingHistory.value = false;
+    loadingGroups.value = false;
   }
 }
 
@@ -196,7 +263,7 @@ async function handleReply() {
     const res = await teacherReply({
       stu_message: stuMessage.value.trim(),
       history: historyList.value.length ? historyList.value : null,
-      model: model.value.trim() || null,
+      model: model.value || null,
     });
     replyResult.value = res;
     message.success('生成成功');
@@ -209,6 +276,8 @@ async function handleReply() {
 
 function clearAll() {
   stuMessage.value = '';
+  selectedGroup.value = null;
+  model.value = null;
   historyList.value = [];
   replyResult.value = null;
   showContext.value = false;

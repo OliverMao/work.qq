@@ -29,7 +29,7 @@ const routes = [
     name: 'modules',
     component: ModulesView,
     meta: {
-      title: '模块管理',
+      title: '群聊管理',
       description: '按会话 JSON 模块维护群聊映射并查看 text 消息',
     },
   },

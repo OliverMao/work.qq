@@ -5,7 +5,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-import requests
+import httpx
 
 from app.config import settings
 from app.services.wecom_api import wecom_api_client
@@ -35,8 +35,9 @@ class UserDirectoryService:
 
         url = f"https://qyapi.weixin.qq.com/cgi-bin/user/list_id?access_token={token}"
         try:
-            resp = requests.post(url, json=payload, timeout=10)
-            data = resp.json()
+            with httpx.Client(timeout=10) as client:
+                resp = client.post(url, json=payload)
+                data = resp.json()
         except Exception as e:
             logger.exception("调用 user/list_id 接口异常")
             raise RuntimeError(f"调用 user/list_id 接口异常: {e}") from e

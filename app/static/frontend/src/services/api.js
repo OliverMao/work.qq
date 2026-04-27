@@ -1,5 +1,5 @@
+// const HOST = "http://8.138.142.246:18000";
 const HOST = "http://localhost:18000";
-
 export async function apiRequest(path, options = {}) {
   const {
     method = "GET",

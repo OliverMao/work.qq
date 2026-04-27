@@ -15,5 +15,6 @@ langchain-core
 langchain-community
 langchain-openai
 langchain-chroma
+langchain-ollama
 chromadb
 zstandard==0.25.0

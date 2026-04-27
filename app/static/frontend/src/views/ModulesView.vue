@@ -4,10 +4,10 @@
       <n-space vertical :size="12">
         <div class="section-title-row">
           <div>
-            <h3 class="section-title">模块筛选</h3>
-            <p class="desc-text">按文件名或 roomid 管理 JSON 模块，维护群聊名称绑定并查看 text 消息。</p>
+            <h3 class="section-title">群聊筛选</h3>
+            <p class="desc-text">按文件名或 roomid 管理群聊，维护群聊名称绑定并查看消息内容。</p>
           </div>
-          <n-tag :bordered="false" type="info">模块总数: {{ totalCount }}</n-tag>
+          <n-tag :bordered="false" type="info">群聊总数: {{ totalCount }}</n-tag>
         </div>
 
         <n-flex wrap align="end" :size="10">
@@ -24,19 +24,13 @@
           <n-button tertiary :loading="loading.modules" @click="refreshModules">刷新</n-button>
         </n-flex>
 
-        <n-flex wrap :size="8">
-          <n-tag round>当前筛选: {{ keyword || "全部" }}</n-tag>
-          <n-tag round type="success">已绑定 room: {{ boundCount }}</n-tag>
-          <n-tag round type="warning">未绑定 room: {{ unboundCount }}</n-tag>
-        </n-flex>
-
         <n-alert v-if="message.text" :type="messageAlertType" :show-icon="true">
           {{ message.text }}
         </n-alert>
       </n-space>
     </n-card>
 
-    <n-card title="模块列表">
+    <n-card title="群聊列表">
       <div class="table-wrap">
         <table>
           <thead>
@@ -100,14 +94,14 @@
                   :loading="loading.messages && selectedModule && selectedModule.filename === item.filename"
                   @click="openTextViewer(item)"
                 >
-                  查看 text
+                  查看会话内容
                 </n-button>
               </td>
             </tr>
           </tbody>
         </table>
         <div v-if="modules.length === 0" class="empty-block">
-          {{ loading.modules ? "正在加载模块..." : "暂无模块数据" }}
+          {{ loading.modules ? "正在加载群聊..." : "暂无群聊数据" }}
         </div>
       </div>
     </n-card>
@@ -191,7 +185,7 @@
           </table>
         </div>
         <div v-else class="empty-block">
-          {{ loading.messages ? "正在加载群聊内容..." : "当前模块暂无 text 类型消息" }}
+          {{ loading.messages ? "正在加载群聊内容..." : "当前群聊暂无 text 类型消息" }}
         </div>
       </n-space>
     </n-modal>

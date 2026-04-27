@@ -31,7 +31,7 @@
             <n-layout>
               <n-layout-header bordered class="admin-header">
                 <div class="header-title">{{ currentPageTitle }}</div>
-                <div class="header-subtitle">{{ currentPageDescription }}</div>
+                <!-- <div class="header-subtitle">{{ currentPageDescription }}</div> -->
               </n-layout-header>
               <n-layout-content class="admin-content">
                 <div class="content-inner">
@@ -71,7 +71,7 @@ const menuOptions = [
     key: '/',
   },
   {
-    label: '模块管理',
+    label: '群聊管理',
     key: '/modules',
   },
   {

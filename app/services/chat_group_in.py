@@ -8,7 +8,7 @@ import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
@@ -88,8 +88,9 @@ class ChatGroupService:
 
 		url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/create?access_token={token}"
 		try:
-			resp = requests.post(url, json=payload, timeout=10)
-			data = resp.json()
+			with httpx.Client(timeout=10) as client:
+				resp = client.post(url, json=payload)
+				data = resp.json()
 			if data.get("errcode") != 0:
 				raise RuntimeError(f"创建群聊失败: {data}")
 
@@ -158,8 +159,9 @@ class ChatGroupService:
 		)
 
 		try:
-			resp = requests.get(url, timeout=10)
-			data = resp.json()
+			with httpx.Client(timeout=10) as client:
+				resp = client.get(url)
+				data = resp.json()
 			if data.get("errcode") != 0:
 				raise RuntimeError(f"获取群聊会话失败: {data}")
 
@@ -241,8 +243,9 @@ class ChatGroupService:
 
 		url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/update?access_token={token}"
 		try:
-			resp = requests.post(url, json=payload, timeout=10)
-			data = resp.json()
+			with httpx.Client(timeout=10) as client:
+				resp = client.post(url, json=payload)
+				data = resp.json()
 			if data.get("errcode") != 0:
 				raise RuntimeError(f"修改群聊失败: {data}")
 
@@ -337,8 +340,9 @@ class ChatGroupService:
 		url = f"https://qyapi.weixin.qq.com/cgi-bin/appchat/send?access_token={token}"
 
 		try:
-			resp = requests.post(url, json=payload, timeout=10)
-			data = resp.json()
+			with httpx.Client(timeout=10) as client:
+				resp = client.post(url, json=payload)
+				data = resp.json()
 			if data.get("errcode") != 0:
 				raise RuntimeError(f"发送 markdown 消息失败: {data}")
 			return data
@@ -407,8 +411,9 @@ class ChatGroupService:
 		)
 
 		try:
-			resp = requests.post(url, json=payload, timeout=10)
-			data = resp.json()
+			with httpx.Client(timeout=10) as client:
+				resp = client.post(url, json=payload)
+				data = resp.json()
 		except Exception as e:
 			logger.exception("调用 externalcontact/groupchat/get 接口异常")
 			raise RuntimeError(f"调用 externalcontact/groupchat/get 接口异常: {e}") from e

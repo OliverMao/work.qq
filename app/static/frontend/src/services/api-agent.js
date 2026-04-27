@@ -1,3 +1,4 @@
+// const HOST = "http://8.138.142.246:18000";
 const HOST = "http://localhost:18000";
 
 async function agentRequest(path, options = {}) {
@@ -41,4 +42,14 @@ export async function savePrompt(filename, content) {
 
 export async function loadHistoryByFilename(filename) {
   return jsonRequest(`/chat/archive/group-module/${encodeURIComponent(filename)}`);
+}
+
+export async function listGroupModules(keyword = '', page = 1, pageSize = 20) {
+  return jsonRequest('/chat/archive/group-modules', {
+    method: 'GET',
+  });
+}
+
+export async function listAvailableModels() {
+  return jsonRequest('/api/agent/models');
 }

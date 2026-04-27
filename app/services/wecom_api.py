@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Dict, Optional, Tuple
 
-import requests
+import httpx
 
 from app.config import settings
 
@@ -36,8 +36,9 @@ class WecomAPIClient:
             f"?corpid={corp_id}&corpsecret={secret}"
         )
         try:
-            resp = requests.get(url, timeout=10)
-            data = resp.json()
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(url)
+                data = resp.json()
             if data.get("errcode") == 0:
                 token = data.get("access_token")
                 expires_at = time.time() + data.get("expires_in", 7200) - 300

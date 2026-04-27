@@ -5,7 +5,7 @@
         <div class="section-title-row">
           <div>
             <h3 class="section-title">会话同步</h3>
-            <p class="desc-text">点击“同步会话”调用 /chat/archive，后端会按 msgid 去重后增量写入本地 JSON 存档。</p>
+            <p class="desc-text">主动进行会话同步，去重后增量写入本地存档。</p>
           </div>
           <n-button type="primary" :loading="loading.pull" @click="handlePullArchive">
             {{ loading.pull ? "同步中..." : "同步会话" }}
@@ -19,7 +19,7 @@
     </n-card>
 
     <n-card title="结果说明">
-      <p class="desc-text">保存消息数表示本次新增落盘数量，跳过重复数表示按 msgid 去重后未重复写入的数量。</p>
+      <!-- <p class="desc-text">保存消息数表示本次新增落盘数量，跳过重复数表示按 msgid 去重后未重复写入的数量。</p> -->
     </n-card>
 
     <n-card v-if="lastResult" title="本次同步结果">
