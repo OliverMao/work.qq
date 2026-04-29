@@ -110,10 +110,8 @@ class ReportGenerationService:
 
         conversation_text = "\n\n".join(text_messages[:100])
 
-        config = self._load_auto_reply_config()
-        model = config.get("model", "deepseek/deepseek-v4-flash")
-
         prompt_template = self._load_report_prompt()
+        logger.info("report_template 长度: %d", len(prompt_template))
         chat_name = chat_name or roomid
 
         user_prompt = f"""{prompt_template}
@@ -125,27 +123,61 @@ class ReportGenerationService:
 """
 
         try:
-            from app.services.agent.agent import TeacherAssistantRAGAgent
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import HumanMessage
             from app.config import settings as cfg
 
-            agent = TeacherAssistantRAGAgent()
+            config = self._load_auto_reply_config()
+            model = config.get("model", "deepseek/deepseek-v4-flash")
 
             model_aliases = cfg.teacher_agent_model_aliases
             actual_model = model_aliases.get(model, model)
 
-            result = agent.generate_teacher_reply(
-                stu_message=user_prompt,
-                chat_id=roomid,
+            api_key = cfg.teacher_agent_llm_api_key
+            base_url = cfg.teacher_agent_llm_base_url
+
+            llm = ChatOpenAI(
                 model=actual_model,
-                auto_build_index=False,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=0.4,
             )
+
+            response = llm.invoke([HumanMessage(content=user_prompt)])
+            reply = response.content.strip() if hasattr(response, 'content') else str(response)
+
+            chat_name = chat_name or roomid
+
+            user_prompt = f"""{prompt_template}
+
+## 对话记录
+{conversation_text}
+
+请根据以上对话记录生成学习报告。
+"""
+
+            model_aliases = cfg.teacher_agent_model_aliases
+            actual_model = model_aliases.get(model, model)
+
+            api_key = cfg.teacher_agent_llm_api_key
+            base_url = cfg.teacher_agent_llm_base_url
+
+            llm = ChatOpenAI(
+                model=actual_model,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=0.4,
+            )
+
+            response = llm.invoke([HumanMessage(content=user_prompt)])
+            reply = response.content.strip() if hasattr(response, 'content') else str(response)
 
             return {
                 "ok": True,
                 "roomid": roomid,
                 "chat_name": chat_name,
                 "message_count": len(text_messages),
-                "report": result.get("reply", ""),
+                "report": reply,
                 "model": model,
             }
 
