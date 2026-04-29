@@ -48,8 +48,8 @@ import {
   NEmpty,
   useMessage,
 } from 'naive-ui';
-import { listChats, generateReport } from '../services/api-agent.js';
-
+import { listChats } from '../services/api.js';
+import { generateReport as callGenerateReport } from '../services/api-agent.js';
 var message = useMessage();
 
 var selectedRoomid = ref(null);
@@ -60,8 +60,9 @@ var availableChats = ref([]);
 var chatOptions = ref([]);
 
 async function loadChats() {
+  const data = await listChats();
   try {
-    var data = await listChats();
+    
     availableChats.value = data.items || [];
     chatOptions.value = availableChats.value.map(function(c) {
       return {
@@ -85,14 +86,23 @@ async function doGenerateReport() {
 
   try {
     loading.value = true;
-    var data = await generateReport(
+    var data = await callGenerateReport(
       selectedRoomid.value,
       chatName.value || null
     );
+    if (data.ok === false) {
+      message.error('生成失败: ' + (data.error || '未知错误'));
+      return;
+    }
     report.value = data.report || '';
-    message.success('报告生成成功');
+    if (report.value) {
+      message.success('报告生成成功');
+    } else {
+      message.warning('生成成功但无报告内容');
+    }
   } catch (e) {
-    message.error('生成失败: ' + e.message);
+    console.error('生成失败:', e);
+    message.error('生成失败: ' + (e.message || '接口错误'));
   } finally {
     loading.value = false;
   }
