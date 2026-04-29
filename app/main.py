@@ -94,8 +94,14 @@ def _send_notification_callback(message: str) -> None:
             return
 
         latest_msg = messages[-1]
+        logger.info(latest_msg)
         roomid = latest_msg.get("roomid", "")
-        stu_message = latest_msg.get("content", "")
+
+        msg_obj = latest_msg.get("text", {})
+        stu_message = msg_obj.get("content", "") if isinstance(msg_obj, dict) else ""
+
+        if not stu_message:
+            stu_message = latest_msg.get("content", "")
 
         if not stu_message:
             stu_message = latest_msg.get("msg", "")
