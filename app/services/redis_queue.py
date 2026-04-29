@@ -60,20 +60,17 @@ class RedisQueueService:
     def process_message(
         self,
         message: Dict[str, Any],
-        chat_archive_callback: Optional[Callable[[str], Dict[str, Any]]] = None,
+        chat_archive_callback: Optional[Callable[[], Dict[str, Any]]] = None,
         build_index_callback: Optional[Callable[[bool], Dict[str, Any]]] = None,
-        send_notification_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        send_notification_callback: Optional[Callable[[str], None]] = None,
     ) -> bool:
         """处理单条消息"""
         try:
             logger.info("开始处理消息: %s", message)
 
-            msgid = message.get("msgid", "")
-            archive_result: Dict[str, Any] = {}
-
             if chat_archive_callback:
                 logger.info("调用 /chat/archive 同步会话...")
-                archive_result = chat_archive_callback(msgid)
+                archive_result = chat_archive_callback()
                 logger.info(
                     "/chat/archive 返回: saved_count=%s",
                     archive_result.get("saved_count", 0),
@@ -92,7 +89,7 @@ class RedisQueueService:
                 logger.info("模拟调用 /api/agent/build-index: 增量构建完成")
 
             if send_notification_callback:
-                send_notification_callback(msgid, archive_result)
+                send_notification_callback("会话存档和索引构建完成")
             else:
                 logger.info("模拟发送通知: 会话存档和索引构建完成")
 
@@ -103,9 +100,9 @@ class RedisQueueService:
 
     def _consumer_loop(
         self,
-        chat_archive_callback: Optional[Callable[[str], Dict[str, Any]]] = None,
+        chat_archive_callback: Optional[Callable[[], Dict[str, Any]]] = None,
         build_index_callback: Optional[Callable[[bool], Dict[str, Any]]] = None,
-        send_notification_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        send_notification_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         """消费者主循环"""
         logger.info("Redis 消费者启动: queue=%s", settings.redis_queue_name)
@@ -122,9 +119,9 @@ class RedisQueueService:
 
     def start_consumer(
         self,
-        chat_archive_callback: Optional[Callable[[str], Dict[str, Any]]] = None,
+        chat_archive_callback: Optional[Callable[[], Dict[str, Any]]] = None,
         build_index_callback: Optional[Callable[[bool], Dict[str, Any]]] = None,
-        send_notification_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        send_notification_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         """启动消费者线程"""
         if self._running:

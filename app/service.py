@@ -104,14 +104,13 @@ def handle_msgaudit_notify_event(msg_dict: dict) -> Optional[str]:
 
         message = {
             "event": "msgaudit_notify",
-            "msgid": msg_dict.get("MsgID", ""),
             "timestamp": msg_dict.get("CreateTime", ""),
             "agent_id": msg_dict.get("AgentID", ""),
             "to_user": msg_dict.get("ToUserName", ""),
             "from_user": msg_dict.get("FromUserName", ""),
         }
         redis_queue_service.push_message(message)
-        logger.info("消息已推送到Redis队列, msgid=%s", msg_dict.get("MsgID"))
+        logger.info("消息已推送到Redis队列")
     except Exception as e:
         logger.error("处理msgaudit_notify失败: %s", e)
     return None

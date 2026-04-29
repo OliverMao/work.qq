@@ -57,7 +57,7 @@ def _ensure_redis_running() -> bool:
         return False
 
 
-def _chat_archive_callback(msgid: str) -> dict:
+def _chat_archive_callback() -> dict:
     """/chat/archive 同步会话回调"""
     return chat_archive_service.archive_messages(limit=1000, auto_build_index=False)
 
@@ -69,52 +69,50 @@ def _build_index_callback(rebuild: bool = False) -> dict:
     return build_teacher_assistant_index(rebuild=rebuild)
 
 
-def _send_notification_callback(msgid: str, archive_result: dict) -> None:
-    """发送通知回调 - 通过msgid查找消息，生成回复并发送到群"""
-    if not msgid:
-        logger.warning("msgid 为空，无法处理")
-        return
+def _send_notification_callback(message: str) -> None:
+    """发送通知回调 - 生成回复并发送到群"""
+    import json
+    from pathlib import Path
 
-    messages = archive_result.get("messages", [])
-    if not messages:
-        logger.warning("archive_result 中没有新消息")
-        return
-
-    target_msg = None
-    for msg in messages:
-        msg_id = msg.get("msgid", "")
-        if str(msg_id) == str(msgid):
-            target_msg = msg
-            break
-
-    if not target_msg:
-        logger.warning("未找到 msgid=%s 对应的消息", msgid)
-        return
-
-    roomid = target_msg.get("roomid", "")
-    stu_message = target_msg.get("content", "")
-
-    if not stu_message:
-        stu_message = target_msg.get("msg", "")
-
-    if not stu_message:
-        logger.warning("无法获取学生消息内容")
-        return
-
-    logger.info("生成回复: msgid=%s, roomid=%s, msg=%s", msgid, roomid, stu_message[:50])
-
-    model = "deepseek/deepseek-v4-flash"
-    aliases = settings.teacher_agent_model_aliases
-    actual_model = aliases.get(model, model)
+    from app.services.agent.agent import TeacherAssistantRAGAgent
+    from app.services.chat_group_in import ChatGroupService
+    from app.config import settings
 
     try:
-        from app.services.agent.agent import TeacherAssistantRAGAgent
+        archive_save_dir = Path(settings.chat_archive_save_dir)
+        json_files = sorted(archive_save_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not json_files:
+            logger.warning("没有找到聊天存档文件")
+            return
+
+        latest_file = json_files[0]
+        with open(latest_file, encoding="utf-8") as f:
+            messages = json.load(f)
+
+        if not messages:
+            logger.warning("消息列表为空")
+            return
+
+        latest_msg = messages[-1]
+        roomid = latest_msg.get("roomid", "")
+        stu_message = latest_msg.get("content", "")
+
+        if not stu_message:
+            stu_message = latest_msg.get("msg", "")
+
+        if not stu_message:
+            logger.warning("无法获取学生消息内容")
+            return
+
+        logger.info("生成回复: roomid=%s, msg=%s", roomid, stu_message[:50])
+
+        model = "deepseek/deepseek-v4-flash"
 
         agent = TeacherAssistantRAGAgent()
         result = agent.generate_teacher_reply(
             stu_message=stu_message,
             chat_id=roomid,
-            model=actual_model,
+            model=model,
             auto_build_index=False,
         )
         reply_content = result.get("reply", "")
@@ -124,8 +122,6 @@ def _send_notification_callback(msgid: str, archive_result: dict) -> None:
             return
 
         logger.info("回复内容: %s", reply_content[:100])
-
-        from app.services.chat_group_in import ChatGroupService
 
         chat_group_service = ChatGroupService()
         chat_group_service.send_markdown_message(chatid="fangya001", content=reply_content)
