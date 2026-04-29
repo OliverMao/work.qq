@@ -150,3 +150,8 @@ export function deleteUserBinding(userId) {
 export async function loadHistoryByFilename(filename) {
   return jsonRequest(`/chat/archive/group-module/${encodeURIComponent(filename)}`);
 }
+
+
+export async function listChats() {
+  return jsonRequest('/api/report/chats');
+}

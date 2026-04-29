@@ -33,7 +33,7 @@ async def save_prompt(req: PromptSaveRequest):
 	prompt_dir = _get_prompt_dir()
 	prompt_dir.mkdir(parents=True, exist_ok=True)
 
-	allowed_files = {"system_role.txt", "task_template.txt", "constraints.txt", "auto_reply_config.txt"}
+	allowed_files = {"system_role.txt", "task_template.txt", "constraints.txt", "auto_reply_config.txt", "report_template.txt"}
 	if req.filename not in allowed_files:
 		raise HTTPException(status_code=400, detail=f"不允许的文件名: {req.filename}")
 

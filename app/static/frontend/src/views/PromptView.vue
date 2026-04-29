@@ -74,12 +74,32 @@
           </div>
         </n-card>
       </n-tab-pane>
+
+      <n-tab-pane name="report_template" tab="report_template.txt">
+        <n-card title="学习报告模板 (report_template.txt)">
+          <n-alert type="info" class="mb-3">
+            用于生成学习报告的 Prompt 模板
+          </n-alert>
+          <n-input
+            v-model:value="prompts.report_template"
+            type="textarea"
+            :rows="12"
+            placeholder="加载中..."
+          />
+          <div class="action-bar">
+            <n-button type="primary" :loading="saving === 'report_template'" @click="savePromptFile('report_template')">
+              保存
+            </n-button>
+            <n-button @click="loadPrompts">重新加载</n-button>
+          </div>
+        </n-card>
+      </n-tab-pane>
     </n-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import {
   NTabs,
   NTabPane,
@@ -95,36 +115,39 @@ import {
 } from 'naive-ui';
 import { getPrompt, savePrompt, getAutoReplyConfig, saveAutoReplyConfig, listAvailableModels } from '../services/api-agent.js';
 
-const message = useMessage();
+var message = useMessage();
 
-const activeTab = ref('auto_reply');
-const saving = ref(null);
-const prompts = ref({
+var activeTab = ref('auto_reply');
+var saving = ref(null);
+var prompts = ref({
   system_role: '',
   task_template: '',
   constraints: '',
+  report_template: '',
 });
 
-const autoReply = ref({
+var autoReply = ref({
   model: 'deepseek/deepseek-v4-flash',
   target_chatid: 'fangya001',
 });
-const availableModels = ref([]);
+var availableModels = ref([]);
 
-const modelOptions = computed(() => {
-  return availableModels.value.map(m => ({ label: m.name || m.id, value: m.id }));
-});
+var modelOptions = ref([]);
 
-const fileMap = {
+var fileMap = {
   system_role: 'system_role.txt',
   task_template: 'task_template.txt',
   constraints: 'constraints.txt',
+  report_template: 'report_template.txt',
 };
 
 async function loadModels() {
   try {
-    const data = await listAvailableModels();
+    var data = await listAvailableModels();
     availableModels.value = data.models || [];
+    modelOptions.value = availableModels.value.map(function(m) {
+      return { label: m.name || m.id, value: m.id };
+    });
   } catch (e) {
     console.warn('加载模型列表失败:', e);
   }
@@ -132,7 +155,7 @@ async function loadModels() {
 
 async function loadAutoReply() {
   try {
-    const data = await getAutoReplyConfig();
+    var data = await getAutoReplyConfig();
     autoReply.value.model = data.model || 'deepseek/deepseek-v4-flash';
     autoReply.value.target_chatid = data.target_chatid || 'fangya001';
   } catch (e) {
@@ -153,11 +176,14 @@ async function saveAutoReply() {
 }
 
 async function loadPrompts() {
-  for (const [key, filename] of Object.entries(fileMap)) {
+  var keys = Object.keys(fileMap);
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var filename = fileMap[key];
     try {
       prompts.value[key] = await getPrompt(filename);
     } catch (e) {
-      console.warn(`加载 ${filename} 失败:`, e);
+      console.warn('加载 ' + filename + ' 失败:', e);
     }
   }
   if (!prompts.value.system_role) {
@@ -166,7 +192,7 @@ async function loadPrompts() {
 }
 
 async function savePromptFile(name) {
-  const content = prompts.value[name];
+  var content = prompts.value[name];
   if (content === undefined || content === null) {
     message.warning('内容不能为空');
     return;
@@ -183,7 +209,7 @@ async function savePromptFile(name) {
   }
 }
 
-onMounted(() => {
+onMounted(function() {
   loadModels();
   loadAutoReply();
   loadPrompts();

@@ -4,6 +4,7 @@ import UsersView from '../views/UsersView.vue';
 import ModulesView from '../views/ModulesView.vue';
 import AgentView from '../views/AgentView.vue';
 import PromptView from '../views/PromptView.vue';
+import ReportView from '../views/ReportView.vue';
 
 const routes = [
   {
@@ -49,6 +50,15 @@ const routes = [
     meta: {
       title: 'Prompt 管理',
       description: '编辑 Agent 的提示词和自动发信配置',
+    },
+  },
+  {
+    path: '/report',
+    name: 'report',
+    component: ReportView,
+    meta: {
+      title: '学习报告',
+      description: '选择群聊生成学习报告',
     },
   },
 ];

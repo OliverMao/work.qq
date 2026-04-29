@@ -53,3 +53,9 @@ export async function getAutoReplyConfig() {
 export async function saveAutoReplyConfig(model, target_chatid) {
   return jsonRequest('/api/agent/prompt/config/auto-reply', { method: 'POST', body: { model, target_chatid } });
 }
+
+
+
+export async function generateReport(roomid, chat_name) {
+  return jsonRequest('/api/report/generate', { method: 'POST', body: { roomid: roomid, chat_name: chat_name } });
+}
