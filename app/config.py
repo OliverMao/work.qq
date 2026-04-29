@@ -191,6 +191,14 @@ class Settings:
                 result.append({"id": parts[0].strip(), "name": parts[1].strip()})
         return result
 
+    @property
+    def redis_url(self) -> str:
+        return self._env.get("REDIS_URL", "redis://localhost:6379/0")
+
+    @property
+    def redis_queue_name(self) -> str:
+        return self._env.get("REDIS_QUEUE_NAME", "wecom_msgaudit_queue")
+
     def is_configured(self) -> bool:
         return bool(self.corp_id and self.token and self.encoding_aes_key)
 

@@ -1,5 +1,9 @@
 const HOST = "http://8.138.142.246:18000";
 // const HOST = "http://localhost:18000";
+
+async function jsonRequest(path, options = {}) {
+  return apiRequest(path, options);
+}
 export async function apiRequest(path, options = {}) {
   const {
     method = "GET",
@@ -49,7 +53,7 @@ export function pullArchive() {
   return apiRequest("/chat/archive", { method: "POST" });
 }
 
-export function listGroupModules(keyword) {
+export function listGroupModules(keyword, page = 1, pageSize = 20) {
   return apiRequest("/chat/archive/group-modules", {
     method: "GET",
     query: { keyword },
@@ -140,4 +144,9 @@ export function deleteUserBinding(userId) {
   return apiRequest(`/chat/archive/user-binding/${encodeURIComponent(userId)}`, {
     method: "DELETE",
   });
+}
+
+
+export async function loadHistoryByFilename(filename) {
+  return jsonRequest(`/chat/archive/group-module/${encodeURIComponent(filename)}`);
 }

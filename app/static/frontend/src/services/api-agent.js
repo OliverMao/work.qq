@@ -40,15 +40,7 @@ export async function savePrompt(filename, content) {
   return jsonRequest('/api/agent/prompt/save', { method: 'POST', body: { filename, content } });
 }
 
-export async function loadHistoryByFilename(filename) {
-  return jsonRequest(`/chat/archive/group-module/${encodeURIComponent(filename)}`);
-}
 
-export async function listGroupModules(keyword = '', page = 1, pageSize = 20) {
-  return jsonRequest('/chat/archive/group-modules', {
-    method: 'GET',
-  });
-}
 
 export async function listAvailableModels() {
   return jsonRequest('/api/agent/models');

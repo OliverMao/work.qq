@@ -130,7 +130,8 @@ import {
   NDivider,
   useMessage,
 } from 'naive-ui';
-import { teacherReply, buildAgentIndex, loadHistoryByFilename, listGroupModules, listAvailableModels } from '../services/api-agent.js';
+import { teacherReply, buildAgentIndex, listAvailableModels } from '../services/api-agent.js';
+import { loadHistoryByFilename,listGroupModules } from '../services/api.js';
 
 const message = useMessage();
 

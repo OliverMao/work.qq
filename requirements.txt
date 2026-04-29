@@ -7,6 +7,7 @@ xmltodict
 typing-extensions
 httpx
 sqlalchemy
+redis
 
 
 # Agent

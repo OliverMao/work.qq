@@ -97,6 +97,25 @@ def handle_click_event(msg_dict: dict) -> Optional[str]:
     return f"点击了菜单：{event.EventKey}"
 
 
+def handle_msgaudit_notify_event(msg_dict: dict) -> Optional[str]:
+    logger.info("收到消息存档通知: %s", msg_dict)
+    try:
+        from app.services.redis_queue import redis_queue_service
+
+        message = {
+            "event": "msgaudit_notify",
+            "timestamp": msg_dict.get("CreateTime", ""),
+            "agent_id": msg_dict.get("AgentID", ""),
+            "to_user": msg_dict.get("ToUserName", ""),
+            "from_user": msg_dict.get("FromUserName", ""),
+        }
+        redis_queue_service.push_message(message)
+        logger.info("消息已推送到Redis队列")
+    except Exception as e:
+        logger.error("处理msgaudit_notify失败: %s", e)
+    return None
+
+
 def dispatch_message(msg_type: str, msg_dict: dict) -> Optional[str]:
     if msg_type == "text":
         return handle_text_message(TextMessage(**msg_dict))
@@ -116,8 +135,9 @@ def dispatch_message(msg_type: str, msg_dict: dict) -> Optional[str]:
             "subscribe": handle_subscribe_event,
             "unsubscribe": handle_unsubscribe_event,
             "enter_agent": handle_enter_agent_event,
-            "LOCATION": handle_location_event,
+            "location": handle_location_event,
             "click": handle_click_event,
+            "msgaudit_notify": handle_msgaudit_notify_event,
         }
         handler = handlers.get(event_name)
         if handler:

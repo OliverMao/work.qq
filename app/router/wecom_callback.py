@@ -124,6 +124,8 @@ async def receive_message(
     logger.info("MsgId: %s", msg_dict.get("MsgId", ""))
     logger.info("FromUserName: %s", msg_dict.get("FromUserName", ""))
     logger.info("ToUserName: %s", msg_dict.get("ToUserName", ""))
+    logger.info("Event: %s", msg_dict.get("Event", ""))
+    logger.info("All fields: %s", msg_dict)
     _log_message_by_type(msg_type, msg_dict)
     logger.info("=" * 50)
 
