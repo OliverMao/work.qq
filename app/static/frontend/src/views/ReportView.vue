@@ -8,10 +8,9 @@
             :options="chatOptions"
             placeholder="选择群聊"
             filterable
+            label-field="label"
+            value-field="roomid"
           />
-        </n-form-item>
-        <n-form-item label="群聊名称(可选)">
-          <n-input v-model:value="chatName" placeholder="自动从文件名提取" />
         </n-form-item>
       </n-form>
 
@@ -19,7 +18,7 @@
         <n-button type="primary" :loading="loading" @click="doGenerateReport">
           生成报告
         </n-button>
-        <n-button @click="loadChats">刷新群聊列表</n-button>
+        <n-button @click="loadChats">刷新列表</n-button>
       </div>
 
       <n-divider />
@@ -42,33 +41,32 @@ import {
   NForm,
   NFormItem,
   NSelect,
-  NInput,
   NButton,
   NDivider,
   NEmpty,
   useMessage,
 } from 'naive-ui';
-import { listChats } from '../services/api.js';
-import { generateReport as callGenerateReport } from '../services/api-agent.js';
+import { listChats, generateReport as callGenerateReport } from '../services/api-agent.js';
+
 var message = useMessage();
 
 var selectedRoomid = ref(null);
-var chatName = ref('');
 var loading = ref(false);
 var report = ref('');
 var availableChats = ref([]);
 var chatOptions = ref([]);
 
 async function loadChats() {
-  const data = await listChats();
   try {
-    
-    availableChats.value = data.items || [];
-    chatOptions.value = availableChats.value.map(function(c) {
-      return {
-        label: c.roomid + ' (' + c.message_count + '条)',
-        value: c.roomid,
-      };
+    var data = await listChats();
+    var items = data.items || [];
+    availableChats.value = items;
+    chatOptions.value = items.map(function(c) {
+      var label = c.room_name || c.roomid;
+      if (c.message_count) {
+        label = label + ' (' + c.message_count + '条)';
+      }
+      return { label: label, roomid: c.roomid };
     });
     if (availableChats.value.length === 0) {
       message.warning('没有找到群聊记录');
@@ -88,7 +86,7 @@ async function doGenerateReport() {
     loading.value = true;
     var data = await callGenerateReport(
       selectedRoomid.value,
-      chatName.value || null
+      null
     );
     if (data.ok === false) {
       message.error('生成失败: ' + (data.error || '未知错误'));

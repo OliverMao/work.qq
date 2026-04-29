@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
+from app.services.chat_archive_binding import chat_archive_binding_service
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,10 @@ class ReportGenerationService:
                 "ok": False,
                 "error": f"未找到群聊 {roomid} 的消息记录",
             }
+
+        if not chat_name:
+            room_names = chat_archive_binding_service.get_room_name_map([roomid])
+            chat_name = room_names.get(roomid, roomid)
 
         text_messages = []
         for msg in messages:
@@ -145,30 +150,29 @@ class ReportGenerationService:
         archive_save_dir = Path(settings.chat_archive_save_dir)
         json_files = list(archive_save_dir.glob("*.json"))
 
-        chats = []
+        chat_map = {}
         for f in json_files:
             try:
                 with open(f, encoding="utf-8") as fp:
                     messages = json.load(fp)
 
-                roomid_set = set()
-                count = 0
                 for msg in messages:
                     rid = msg.get("roomid", "")
                     if rid:
-                        roomid_set.add(rid)
-                        count += 1
-
-                for rid in roomid_set:
-                    chats.append({
-                        "roomid": rid,
-                        "filename": f.name,
-                        "message_count": count,
-                    })
+                        if rid not in chat_map:
+                            chat_map[rid] = {"roomid": rid, "filename": f.name, "message_count": 0}
+                        chat_map[rid]["message_count"] += 1
             except Exception:
                 continue
 
-        return chats
+        roomids = list(chat_map.keys())
+        if roomids:
+            name_map = chat_archive_binding_service.get_room_name_map(roomids)
+            for rid in chat_map:
+                if rid in name_map:
+                    chat_map[rid]["room_name"] = name_map[rid]
+
+        return list(chat_map.values())
 
 
 report_generation_service = ReportGenerationService()
