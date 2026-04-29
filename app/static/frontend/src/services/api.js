@@ -155,3 +155,11 @@ export async function loadHistoryByFilename(filename) {
 export async function listChats() {
   return jsonRequest('/api/report/chats');
 }
+
+export async function generateReport(roomid, chat_name) {
+  var body = { roomid: roomid };
+  if (chat_name) {
+    body.chat_name = chat_name;
+  }
+  return jsonRequest('/api/report/generate', { method: 'POST', body: body });
+}

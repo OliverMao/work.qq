@@ -1,5 +1,5 @@
-// const HOST = "http://8.138.142.246:18000";
-const HOST = "http://localhost:18000";
+const HOST = "http://8.138.142.246:18000";
+// const HOST = "http://localhost:18000";
 
 async function agentRequest(path, options = {}) {
   const { method = "GET", body = null } = options;
@@ -56,10 +56,3 @@ export async function saveAutoReplyConfig(model, target_chatid) {
 
 
 
-export async function generateReport(roomid, chat_name) {
-  var body = { roomid: roomid };
-  if (chat_name) {
-    body.chat_name = chat_name;
-  }
-  return jsonRequest('/api/report/generate', { method: 'POST', body: body });
-}

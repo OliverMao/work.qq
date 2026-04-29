@@ -44,12 +44,23 @@ class ReportGenerationService:
     def _load_report_prompt(self) -> str:
         """加载报告生成 Prompt"""
         prompt_dir = Path(settings.teacher_agent_prompt_dir)
+        
+        if not prompt_dir.is_absolute():
+            project_root = Path(__file__).resolve().parent.parent.parent
+            prompt_dir = project_root / prompt_dir
+        
         template_file = prompt_dir / "report_template.txt"
+        
+        logger.info("尝试读取prompt文件: %s, exists=%s", template_file, template_file.exists())
 
         if template_file.exists():
-            return template_file.read_text(encoding="utf-8").strip()
+            content = template_file.read_text(encoding="utf-8").strip()
+            logger.info("prompt内容前100字: %s", content[:100])
+            return content
 
-        return "请根据下面的对话记录生成一份学习报告，包括概述、关键话题、优秀回答和建议。"
+        default_prompt = "请根据下面的对话记录生成一份学习报告，包括概述、关键话题、优秀回答和建议。"
+        logger.warning("prompt文件不存在，使用默认: %s", default_prompt)
+        return default_prompt
 
     def _load_chat_messages(self, roomid: str) -> List[Dict[str, Any]]:
         """加载指定群聊的消息"""

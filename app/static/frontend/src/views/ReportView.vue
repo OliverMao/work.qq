@@ -46,8 +46,7 @@ import {
   NEmpty,
   useMessage,
 } from 'naive-ui';
-import { listChats, generateReport as callGenerateReport } from '../services/api-agent.js';
-
+import { listChats ,generateReport as callGenerateReport } from '../services/api.js';
 var message = useMessage();
 
 var selectedRoomid = ref(null);
