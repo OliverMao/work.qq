@@ -69,6 +69,35 @@ def _build_index_callback(rebuild: bool = False) -> dict:
     return build_teacher_assistant_index(rebuild=rebuild)
 
 
+def _load_auto_reply_config() -> dict:
+    """加载自动发信配置"""
+    from app.config import settings
+    from pathlib import Path
+
+    prompt_dir = Path(settings.teacher_agent_prompt_dir)
+    config_file = prompt_dir / "auto_reply_config.txt"
+
+    config = {
+        "model": "deepseek/deepseek-v4-flash",
+        "target_chatid": "fangya001",
+    }
+
+    if config_file.exists():
+        try:
+            content = config_file.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    config[key.strip()] = value.strip()
+        except Exception as e:
+            logger.warning("读取自动发信配置失败: %s", e)
+
+    return config
+
+
 def _send_notification_callback(message: str) -> None:
     """发送通知回调 - 生成回复并发送到群"""
     import json
@@ -77,6 +106,10 @@ def _send_notification_callback(message: str) -> None:
     from app.services.agent.agent import TeacherAssistantRAGAgent
     from app.services.chat_group_in import ChatGroupService
     from app.config import settings
+
+    auto_reply_config = _load_auto_reply_config()
+    target_chatid = auto_reply_config.get("target_chatid", "fangya001")
+    target_model = auto_reply_config.get("model", "deepseek/deepseek-v4-flash")
 
     try:
         archive_save_dir = Path(settings.chat_archive_save_dir)
@@ -110,15 +143,13 @@ def _send_notification_callback(message: str) -> None:
             logger.warning("无法获取学生消息内容")
             return
 
-        logger.info("生成回复: roomid=%s, msg=%s", roomid, stu_message[:50])
-
-        model = "deepseek/deepseek-v4-flash"
+        logger.info("生成回复: roomid=%s, msg=%s, model=%s", roomid, stu_message[:50], target_model)
 
         agent = TeacherAssistantRAGAgent()
         result = agent.generate_teacher_reply(
             stu_message=stu_message,
             chat_id=roomid,
-            model=model,
+            model=target_model,
             auto_build_index=False,
         )
         reply_content = result.get("reply", "")
@@ -130,8 +161,8 @@ def _send_notification_callback(message: str) -> None:
         logger.info("回复内容: %s", reply_content[:100])
 
         chat_group_service = ChatGroupService()
-        chat_group_service.send_markdown_message(chatid="fangya001", content=reply_content)
-        logger.info("消息已发送到群: fangya001")
+        chat_group_service.send_markdown_message(chatid=target_chatid, content=reply_content)
+        logger.info("消息已发送到群: %s", target_chatid)
 
     except Exception as e:
         logger.error("发送通知失败: %s", e)

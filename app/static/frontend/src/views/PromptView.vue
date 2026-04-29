@@ -1,6 +1,25 @@
 <template>
   <div class="prompt-view">
     <n-tabs type="line" v-model:value="activeTab">
+      <n-tab-pane name="auto_reply" tab="自动发信">
+        <n-card title="自动发信配置">
+          <n-form>
+            <n-form-item label="使用的模型">
+              <n-select v-model:value="autoReply.model" :options="modelOptions" />
+            </n-form-item>
+            <n-form-item label="发送到群ID">
+              <n-input v-model:value="autoReply.target_chatid" placeholder="fangya001" />
+            </n-form-item>
+          </n-form>
+          <div class="action-bar">
+            <n-button type="primary" :loading="saving === 'auto_reply'" @click="saveAutoReply">
+              保存
+            </n-button>
+            <n-button @click="loadAutoReply">重新加载</n-button>
+          </div>
+        </n-card>
+      </n-tab-pane>
+
       <n-tab-pane name="system_role" tab="system_role.txt">
         <n-card title="系统角色 (system_role.txt)">
           <n-input
@@ -60,7 +79,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import {
   NTabs,
   NTabPane,
@@ -69,13 +88,16 @@ import {
   NButton,
   NAlert,
   NText,
+  NSelect,
+  NForm,
+  NFormItem,
   useMessage,
 } from 'naive-ui';
-import { getPrompt, savePrompt } from '../services/api-agent.js';
+import { getPrompt, savePrompt, getAutoReplyConfig, saveAutoReplyConfig, listAvailableModels } from '../services/api-agent.js';
 
 const message = useMessage();
 
-const activeTab = ref('system_role');
+const activeTab = ref('auto_reply');
 const saving = ref(null);
 const prompts = ref({
   system_role: '',
@@ -83,11 +105,52 @@ const prompts = ref({
   constraints: '',
 });
 
+const autoReply = ref({
+  model: 'deepseek/deepseek-v4-flash',
+  target_chatid: 'fangya001',
+});
+const availableModels = ref([]);
+
+const modelOptions = computed(() => {
+  return availableModels.value.map(m => ({ label: m.name || m.id, value: m.id }));
+});
+
 const fileMap = {
   system_role: 'system_role.txt',
   task_template: 'task_template.txt',
   constraints: 'constraints.txt',
 };
+
+async function loadModels() {
+  try {
+    const data = await listAvailableModels();
+    availableModels.value = data.models || [];
+  } catch (e) {
+    console.warn('加载模型列表失败:', e);
+  }
+}
+
+async function loadAutoReply() {
+  try {
+    const data = await getAutoReplyConfig();
+    autoReply.value.model = data.model || 'deepseek/deepseek-v4-flash';
+    autoReply.value.target_chatid = data.target_chatid || 'fangya001';
+  } catch (e) {
+    console.warn('加载自动发信配置失败:', e);
+  }
+}
+
+async function saveAutoReply() {
+  try {
+    saving.value = 'auto_reply';
+    await saveAutoReplyConfig(autoReply.value.model, autoReply.value.target_chatid);
+    message.success('保存成功');
+  } catch (e) {
+    message.error(e.message || '保存失败');
+  } finally {
+    saving.value = null;
+  }
+}
 
 async function loadPrompts() {
   for (const [key, filename] of Object.entries(fileMap)) {
@@ -121,6 +184,8 @@ async function savePromptFile(name) {
 }
 
 onMounted(() => {
+  loadModels();
+  loadAutoReply();
   loadPrompts();
 });
 </script>

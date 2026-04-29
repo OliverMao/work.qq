@@ -48,7 +48,7 @@ const routes = [
     component: PromptView,
     meta: {
       title: 'Prompt 管理',
-      description: '编辑 Agent 的三个提示词文件',
+      description: '编辑 Agent 的提示词和自动发信配置',
     },
   },
 ];

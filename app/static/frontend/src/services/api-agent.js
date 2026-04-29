@@ -45,3 +45,11 @@ export async function savePrompt(filename, content) {
 export async function listAvailableModels() {
   return jsonRequest('/api/agent/models');
 }
+
+export async function getAutoReplyConfig() {
+  return jsonRequest('/api/agent/prompt/config/auto-reply');
+}
+
+export async function saveAutoReplyConfig(model, target_chatid) {
+  return jsonRequest('/api/agent/prompt/config/auto-reply', { method: 'POST', body: { model, target_chatid } });
+}
