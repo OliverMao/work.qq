@@ -1,11 +1,11 @@
 """
-企业微信内部群聊管理路由，目前暂时禁用
+企业微信群聊管理路由
 """
 
 from typing import List, Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.services.chat_group_in import chat_group_service
 
@@ -33,7 +33,7 @@ class SendMarkdownMessageRequest(BaseModel):
 
 class CustomerGroupDetailRequest(BaseModel):
     chat_id: str
-    need_name: int = Field(default=0, ge=0, le=1)
+    need_name: int = 0
 
 
 @router.post("/group")
@@ -46,10 +46,10 @@ async def create_chat_group(payload: CreateChatGroupRequest):
     )
 
 
-@router.get("/groups")
-async def list_chat_groups():
-    """列出所有已创建的企业微信群聊会话。"""
-    return chat_group_service.list_all_chat_groups()
+@router.get("/group/{chatid}")
+async def get_chat_group(chatid: str):
+    """获取企业微信群聊信息。"""
+    return chat_group_service.get_chat_group(chatid=chatid)
 
 
 @router.post("/group/update")
@@ -64,18 +64,6 @@ async def update_chat_group(payload: UpdateChatGroupRequest):
     )
 
 
-@router.get("/group/sync")
-async def sync_chat_group(chatid: str):
-    """从企业微信获取群聊信息并同步到本地数据库。"""
-    return chat_group_service.get_chat_group_and_sync(chatid=chatid)
-
-
-@router.delete("/group/{chatid}")
-async def delete_chat_group(chatid: str):
-    """删除本地数据库中的群聊记录。"""
-    return chat_group_service.delete_chat_group(chatid)
-
-
 @router.post("/group/send/markdown")
 async def send_group_markdown(payload: SendMarkdownMessageRequest):
     """向指定群聊发送 markdown 消息。"""
@@ -83,12 +71,6 @@ async def send_group_markdown(payload: SendMarkdownMessageRequest):
         chatid=payload.chatid,
         content=payload.content,
     )
-
-
-@router.post("/groups/sync")
-async def batch_sync_groups_from_cloud():
-    """批量从企业微信云端同步群聊信息到本地数据库。"""
-    return chat_group_service.batch_sync_chat_groups_from_cloud()
 
 
 @router.post("/customer-group/detail")
