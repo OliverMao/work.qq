@@ -149,10 +149,6 @@ class Settings:
         )
 
     @property
-    def teacher_agent_llm_model(self) -> str:
-        return self._env.get("TEACHER_AGENT_LLM_MODEL", "gpt-4o-mini")
-
-    @property
     def teacher_agent_llm_api_key(self) -> str:
         return self._env.get(
             "TEACHER_AGENT_LLM_API_KEY",

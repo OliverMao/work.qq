@@ -148,6 +148,31 @@ class TeacherAssistantRAGAgent:
 			distance_threshold=self.distance_threshold,
 		)
 
+	def _load_auto_reply_config(self) -> dict:
+		"""加载自动发信配置（获取模型）"""
+		prompt_dir = Path(settings.teacher_agent_prompt_dir)
+		config_file = prompt_dir / "auto_reply_config.txt"
+
+		config = {
+			"model": "meituan/longcat-flash-lite",
+			"target_chatid": "fangya001",
+		}
+
+		if config_file.exists():
+			try:
+				content = config_file.read_text(encoding="utf-8")
+				for line in content.splitlines():
+					line = line.strip()
+					if not line or line.startswith("#"):
+						continue
+					if "=" in line:
+						key, value = line.split("=", 1)
+						config[key.strip()] = value.strip()
+			except Exception:
+				pass
+
+		return config
+
 	def _get_llm(self, model: Optional[str] = None):
 		override_key = f"_llm_{model}"
 		if hasattr(self, override_key) and getattr(self, override_key) is not None:
@@ -160,12 +185,18 @@ class TeacherAssistantRAGAgent:
 				"缺少 langchain-openai，请先安装 requirements.txt 中新增依赖"
 			) from exc
 
+		if model:
+			actual_model = model
+		else:
+			auto_config = self._load_auto_reply_config()
+			actual_model = auto_config.get("model", "meituan/longcat-flash-lite")
+
 		api_key = settings.teacher_agent_llm_api_key
 		if not api_key:
 			raise RuntimeError("缺少 LLM API Key，请配置 TEACHER_AGENT_LLM_API_KEY")
 
 		kwargs: Dict[str, Any] = {
-			"model": model or settings.teacher_agent_llm_model,
+			"model": actual_model,
 			"api_key": api_key,
 			"temperature": settings.teacher_agent_llm_temperature,
 		}
