@@ -119,6 +119,10 @@ class VectorStoreManager:
 		rebuild: bool = False,
 		target_file: str | None = None,
 	) -> Dict[str, Any]:
+		from app.config import settings
+		
+		exclude_roomids = set(settings.teacher_agent_exclude_roomids)
+		
 		source_files = collect_source_files(archive_dir, target_file)
 		if rebuild:
 			self._reset_vectorstore()
@@ -149,6 +153,10 @@ class VectorStoreManager:
 
 			for chunk in chunks:
 				if not rebuild and chunk.chunk_id in indexed_ids:
+					skipped_chunks += 1
+					continue
+				
+				if exclude_roomids and chunk.chat_id in exclude_roomids:
 					skipped_chunks += 1
 					continue
 
@@ -226,6 +234,7 @@ class VectorStoreManager:
 		vectorstore = self._get_vectorstore()
 
 		same_chat_docs: List[Any] = []
+		
 		if chat_id:
 			try:
 				same_chat_docs = vectorstore.max_marginal_relevance_search(

@@ -88,6 +88,13 @@ class Settings:
         return self._env.get("TEACHER_AGENT_PROMPT_DIR", str(default))
 
     @property
+    def teacher_agent_exclude_roomids(self) -> List[str]:
+        value = self._env.get("TEACHER_AGENT_EXCLUDE_ROOMIDS", "")
+        if not value:
+            return []
+        return [v.strip() for v in value.split(",") if v.strip()]
+
+    @property
     def teacher_agent_collection_name(self) -> str:
         return self._env.get("TEACHER_AGENT_COLLECTION_NAME", "teacher_assistant_dialogue_v1")
 

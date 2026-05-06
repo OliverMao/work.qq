@@ -137,6 +137,7 @@ class TeacherAssistantRAGAgent:
 
 	def _retrieve_context(self, stu_message: str, chat_id: Optional[str]) -> tuple[List[Any], Dict[str, Any]]:
 		vectorstore_manager = self._get_vectorstore_manager()
+
 		return vectorstore_manager.retrieve(
 			stu_message=stu_message,
 			chat_id=chat_id,
