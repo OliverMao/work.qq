@@ -191,8 +191,13 @@ def _send_notification_callback(message: str) -> None:
         logger.info("回复内容: %s", reply_content[:100])
 
         chat_group_service = ChatGroupService()
-        chat_group_service.send_markdown_message(chatid=target_chatid, content=reply_content)
-        logger.info("消息已发送到群: %s", target_chatid)
+
+        chat_group_service.send_markdown_message(chatid=default_target_chatid, content=reply_content)
+        logger.info("消息已发送到群: %s", default_target_chatid)
+
+        if target_chatid != default_target_chatid:
+            chat_group_service.send_markdown_message(chatid=target_chatid, content=reply_content)
+            logger.info("额外发送到群: %s", target_chatid)
 
     except Exception as e:
         logger.error("发送通知失败: %s", e)
