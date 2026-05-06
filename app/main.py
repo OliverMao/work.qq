@@ -108,7 +108,7 @@ def _send_notification_callback(message: str) -> None:
     from app.config import settings
 
     auto_reply_config = _load_auto_reply_config()
-    target_chatid = auto_reply_config.get("target_chatid", "fangya001")
+    default_target_chatid = auto_reply_config.get("target_chatid", "fangya001")
     target_model = auto_reply_config.get("model", "deepseek/deepseek-v4-flash")
 
     try:
@@ -129,6 +129,11 @@ def _send_notification_callback(message: str) -> None:
         latest_msg = messages[-1]
         logger.info(latest_msg)
         roomid = latest_msg.get("roomid", "")
+        from_user = latest_msg.get("from", "")
+
+        if not (from_user.startswith("wo") or from_user.startswith("wm")):
+            logger.info("发信人 %s 不是wo/wm开头，跳过自动发信", from_user)
+            return
 
         msg_obj = latest_msg.get("text", {})
         stu_message = msg_obj.get("content", "") if isinstance(msg_obj, dict) else ""
@@ -143,7 +148,32 @@ def _send_notification_callback(message: str) -> None:
             logger.warning("无法获取学生消息内容")
             return
 
-        logger.info("生成回复: roomid=%s, msg=%s, model=%s", roomid, stu_message[:50], target_model)
+        target_chatid = default_target_chatid
+        room_name = ""
+        if roomid:
+            try:
+                from app.services.chat_archive_binding import chat_archive_binding_service
+                room_names = chat_archive_binding_service.get_room_name_map([roomid])
+                room_name = room_names.get(roomid, "")
+                if room_name:
+                    if "-H" in room_name:
+                        target_chatid = "fangyah"
+                        logger.info("群名称包含-H，发送到 fangyah")
+                    elif "-X" in room_name:
+                        target_chatid = "fangyax"
+                        logger.info("群名称包含-X，发送到 fangyax")
+                    elif "-T" in room_name:
+                        target_chatid = "fangyat"
+                        logger.info("群名称包含-T，发送到 fangyat")
+                    elif "-P" in room_name:
+                        target_chatid = "fangyap"
+                        logger.info("群名称包含-P，发送到 fangyap")
+            except Exception as e:
+                logger.warning("查询群名称失败: %s", e)
+                room_names = {}
+
+        logger.info("生成回复: roomid=%s, room_name=%s, msg=%s, model=%s, target=%s", 
+            roomid, room_name, stu_message[:50], target_model, target_chatid)
 
         agent = TeacherAssistantRAGAgent()
         result = agent.generate_teacher_reply(
