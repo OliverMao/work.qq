@@ -422,6 +422,10 @@ class ChatArchiveService:
 
     def list_group_archive_modules(self, keyword: Optional[str] = None) -> Dict[str, Any]:
         """按 JSON 文件列出群聊存档模块，供前端管理界面展示。"""
+        from app.config import settings
+        
+        exclude_roomids = set(settings.teacher_agent_exclude_roomids)
+        
         save_dir = Path(settings.chat_archive_save_dir)
         if not save_dir.exists():
             return {
@@ -452,6 +456,9 @@ class ChatArchiveService:
                 self._extract_roomid_from_messages(messages)
                 or self._extract_roomid_from_filename(file_path)
             )
+            
+            if exclude_roomids and roomid in exclude_roomids:
+                continue
 
             filename = file_path.name
             if keyword_value:
@@ -492,6 +499,10 @@ class ChatArchiveService:
 
     def list_archive_distinct_user_ids(self, keyword: Optional[str] = None) -> Dict[str, Any]:
         """扫描全部聊天存档文件，提取去重后的 user_id 列表。"""
+        from app.config import settings
+        
+        exclude_roomids = set(settings.teacher_agent_exclude_roomids)
+        
         save_dir = Path(settings.chat_archive_save_dir)
         if not save_dir.exists():
             return {
@@ -519,6 +530,10 @@ class ChatArchiveService:
                 messages = self._load_messages_from_file(file_path)
             except Exception as e:
                 logger.warning("读取存档文件失败: %s, error=%s", file_path, e)
+                continue
+
+            roomid = self._extract_roomid_from_filename(file_path)
+            if exclude_roomids and roomid in exclude_roomids:
                 continue
 
             messages_scanned += len(messages)
