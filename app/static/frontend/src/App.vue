@@ -86,10 +86,10 @@ const menuOptions = [
     label: 'Prompt 管理',
     key: '/prompts',
   },
-  {
-    label: '学习报告',
-    key: '/report',
-  },
+  // {
+  //   label: '学习报告',
+  //   key: '/report',
+  // },
 ];
 
 const activeMenuKey = computed(() => route.path);

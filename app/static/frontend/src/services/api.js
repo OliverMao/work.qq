@@ -1,4 +1,4 @@
-const HOST = "http://8.138.142.246:18000";
+const HOST = "https://workqq.0752fangya.cn";
 // const HOST = "http://localhost:18000";
 
 async function jsonRequest(path, options = {}) {

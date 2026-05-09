@@ -5,4 +5,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   // base: '/static/frontend/',
+  preview: {
+    allowedHosts: ['agent.0752fangya.cn']
+  }
 })
